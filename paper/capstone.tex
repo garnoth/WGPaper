@@ -26,12 +26,11 @@
 \abstract{
 
 The WireGuard VPN has had a successful mainstream adoption, as evidenced by its recent inclusion in many 
-open-source operating systems as well as a recent native Windows kernel module. 
-WireGuard does not use x509 certificates or the traditional PKI infrastructure. Key management is intentionally left up to the users which can causes a problem because the client key is not easily associated with a user or system and cannot be revoked, 
-except by removing the client’s public key from all servers.
+open-source operating systems\cite{donenfeld_wireguard_nodate} as well as a recent native Windows kernel module\cite{noauthor_wireguard-nt_nodate}. 
+WireGuard does not use x509 certificates or the traditional PKI infrastructure. Key management is intentionally left up to the users which can causes a problem because the client key is not easily associated with a user or system and cannot be revoked, except by removing the client’s public key from all servers.
 The client and server’s public key consist of a single 256-bit public key based on Curve25519 
 which must be pre-shared with the server and client respectively before a successful handshake can be made. 
-On a Linux laptop for example, the private key is held in a plaintext file along with the server’s public key and IP address. 
+On a Linux laptop for example, the private key is held in a plain-text file along with the server’s public key and IP address. 
 Securing this file is left up to the user and it would be an easy target for malware or a malicious party to steal.
 The WireGuard protocol implements perfect forward secrecy, meaning loss of a private key still won’t allow past conversations to be decrypted. 
 However, secure key management is still very important because loss of the client’s private key would result in two major vulnerabilities. 
@@ -60,7 +59,7 @@ for attackers and hard to detect for system administrators.
 
 \item[Security Key]
 A device that securely stores cryptographic keys and restrict access through a limited interface. 
-Nitrokey Start[3] or the more common YubiKey[4], [5], are a class of security keys that implement a user-controlled 
+Nitrokey Start\cite{noauthor_nitrokey_nodate} or the more common YubiKey\cite{noauthor_discover_nodate}\cite{noauthor_u2f_nodate-1}, are a class of security keys that implement a user-controlled 
 cryptographic authenticator which are resistant to malware and phishing attacks and are essentially a hardware security module (HSM). 
 These devices typically connect to a computer or smartphone via USB or NFC
 
@@ -69,7 +68,7 @@ These devices typically connect to a computer or smartphone via USB or NFC
 a VPN technology proposed in 2017 that operates at the network layer, which aims to replace popular TLS-based VPNs like OpenVPN and IPsec.
 WireGuard has been described as “crypto-opinionated”, meaning the WireGuard protocol supports only one cryptographic primitive for each cryptographic requirement.
 There is no support for negotiation of cryptographic parameters. For example, WireGuard only supports ChaCha20 for symmetric 
-encryption[7] of data and Curve25519 key pairs for client authentication.
+encryption\cite{donenfeld_wireguard_2017} of data and Curve25519 key pairs for client authentication.
 
 \item[Curve25519]
 digital signature operations are referred to as Ed25519. Key-signing operations are referred to as x25519. 
@@ -82,7 +81,7 @@ when generating the symmetric cipher key.
 \textpages
 
 \chapter {Introduction}
-The main reason we write is to communicate\\
+The main reason we write is to communicate\
 
 The other reason is for street cred
 
@@ -91,7 +90,7 @@ Background is important to have for big papers
 Provide background here
 
 \section {Contributions}
-The Curve25519 algorithm is being used in an increasing number of open-source and commercial products[11] from SSH to Signal, however hardware support in popular 
+The Curve25519 algorithm is being used in an increasing number of open-source and commercial products\cite{noauthor_things_nodate-1} from SSH to Signal, however hardware support in popular 
 security keys is currently almost non-existent. YubiKey is currently the most popular security key manufacturer however all of their current products 
 lack support for x255191. I hope my project will encourage more manufactures to add support for x25519 in their security keys.
 
@@ -99,14 +98,28 @@ lack support for x255191. I hope my project will encourage more manufactures to 
 \section {Methodology}
 In order to evaluate what I have done, I will do XYZ and present my findings
 
-\chapter {Big new section}
+\chapter {Creating the system}
 
-\section {Introduction}
-Here is section 1
+\section {Starting}
+When I started on the project in full, after receiving the go-ahead in August and fall quarter began, I didn't know where to begin but I knew I had start with something that would demonstrate my ability to get this project going.
+I figured that interfacing with the NitroKey would be the first order of business. If the key is held on that device, than I should be able to create one and sign some data with it. I initially chose the nitrokey start because it's product page said it supported X25519\cite{noauthor_nitrokey_nodate} which is the ECDH key derivation process. After a few frustrating days I couldn't figure out how to even generate or put a curve25519 key on the nitrokey start, nor had I found any software that interfaced with a nitrokey start for performing x25519 operations. What I did discover after pouring over NitroKey's documentation was that they recommended using a program called OpenSC to work with the Nitrokey but that only a program called GnuPG was capable of telling the Nitrokey to generate a curve25519 key. One important detail was that GnuPG could generate the keys but didn't support key derivation so I couldn't use it to do x25519.
+
+It was a frustrating start to my project, I couldn't' even start on modifying WireGuard to use the NitroKey if I couldn't create a proof-of-concept program that would perform the key derivation operation on the Nitrokey itself.
+\section {OpenSC}
+Key derivation for ECDH requires access to user A's private key and access to user B's public key. The operation will generate a new 'shared' key that is identical on both sides with the order of private/public keys flipped.
+After researching the OpenSC tool support forums, I was able to find the command string that should perform the operation on the key, however it refused to read my public key. I found out that while NitroKey said OpenSC was the best tool to use with the nitrokey, OpenSC didn't support reading curve25519 keys! Later I found that there was a single test that was written in OpenSC which used the PKCS11 interface to generate and verify a shared-secret on the hardware device but this functionality wasn't exposed to users in anyway. Technically, OpenSC could be used to test that x25519 operations worked on a hardware device but with no user control over the process. This realization set the stage for the rest of the project: technically the functionality is there but no-one has a practical implementation yet. I'll just have to do this on hard-mode.
+
+This gave me enough information to start looking into curve25519 support in OpenSSL. Curve 25519 support was a relatively recent addition in version 1.1 of the program\cite{noauthor_support_nodate}.
+After digging through the OpenSC tool and reading the OpenSSL function documentation, I was able to upgrade how OpenSC read public-keys during key derivation and get the previous command working.
+Then I wrote some tests which automated this process and could verify if the functionality was broken in the future.
 \subsection {my subsection}
 Minor points
 
+\section{pkclient}
+I knew if I had key derivation working on the hardware key, my first hurdle was over. The next hurdle was deciding on how to integrate my desired functionality into the WireGuard program. I attempted to modify and build a kernel module but I got no where working by myself for a few days. Working with OpenSC felt like enough C code for the meantime and I needed to make progress on my project. There is a Golang version of WireGuard that appeared easy to read and it's portable, meaning it works on many different versions. I settled on trying to get that working. So I learned Go in a week and wrote pkclient. It shows. I had a lot of issues with getting the modules to work  but I figured out how to override modules and point them to local copies that had been modified.
 
+PKCS11 is the standard interface for interacting with hardware security modules, logging into them and requesting operations, getting output back, all while the keys stay protected on the device.
+My next step for incremental building was to create an interface program that could login to a hardware key, find a curve25519 key and perform key derivation operations.
 
 \chapter {Data1}
 
@@ -116,11 +129,11 @@ I will discuss the limitations of my project as well as the technical hurdles th
 
 \section {Limitations}
 I had initially hoped that my project could include mobile operating systems such as a smart phone. Users can easily use security keys
-with mobile operationg systems but due to technical requirements of the WireGuard protocal, a user would have to leave their security key connected
-to their smartphone perminitly, which could only be accomplishing using duct-tape for NFC devices or leaving a usb device inserted into their USB port, which 
-seems like a hazard for the device. This always-connected requirement exists because the WireGuard protocol performs a rekey operation between peers at a default 120 seconds 
+with mobile operating systems but due to technical requirements of the WireGuard protocol, a user would have to leave their security key connected
+to their smartphone permanently, which could only be accomplishing using duct-tape for NFC devices or leaving a USB device inserted into their USB port, which 
+seems like a hazard for the device. This always-connected requirement exists because the WireGuard protocol performs a re-key operation between peers at a default 120 seconds 
 or after 2\textsuperscript{60} messages are exchanged. I could require users to modify their WireGuard server and client to default to a much longer 
-timeout for rekey but this seems like a burdensome approch and it's not possible in all situations for the client to modify server settings.
+timeout for re-key but this seems like a burdensome approach and it's not possible in all situations for the client to modify server settings.
 
 More issues discussed here 
 
@@ -131,4 +144,6 @@ More issues discussed here
 \section {Future Research}
 What I think future research would look like
 
+\bibliographystyle{plain}
+\bibliography{references}
 \end{document}
