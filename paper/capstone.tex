@@ -1,4 +1,6 @@
 \documentclass [11pt, proquest] {uwthesis}[2020/02/24]
+\usepackage{graphicx}
+\graphicspath{ {./images/} }
 
 \setcounter{tocdepth}{1}  % Print the chapter and sections to the toc
 
@@ -81,9 +83,7 @@ when generating the symmetric cipher key.
 \textpages
 
 \chapter {Introduction}
-The main reason we write is to communicate\
-
-The other reason is for street cred
+WireGuard is a new implementation of an open-source Virtual Private Network (VPN) introduced in 2018.
 
 \section {Background}
 Background is important to have for big papers
@@ -106,20 +106,39 @@ I figured that interfacing with the NitroKey would be the first order of busines
 
 It was a frustrating start to my project, I couldn't' even start on modifying WireGuard to use the NitroKey if I couldn't create a proof-of-concept program that would perform the key derivation operation on the Nitrokey itself.
 \section {OpenSC}
-Key derivation for ECDH requires access to user A's private key and access to user B's public key. The operation will generate a new 'shared' key that is identical on both sides with the order of private/public keys flipped.
-After researching the OpenSC tool support forums, I was able to find the command string that should perform the operation on the key, however it refused to read my public key. I found out that while NitroKey said OpenSC was the best tool to use with the nitrokey, OpenSC didn't support reading curve25519 keys! Later I found that there was a single test that was written in OpenSC which used the PKCS11 interface to generate and verify a shared-secret on the hardware device but this functionality wasn't exposed to users in anyway. Technically, OpenSC could be used to test that x25519 operations worked on a hardware device but with no user control over the process. This realization set the stage for the rest of the project: technically the functionality is there but no-one has a practical implementation yet. I'll just have to do this on hard-mode.
+Key derivation for ECDH, called X25519 in my specific case, requires access to user Bob's private key and access to user Alice's public key. The operation will generate a new 'shared' key that is identical for both parties when the keys are flipped and you use Alice's private key and Bob's public key.
+After researching the OpenSC tool support forums, I was able to find the command string that should have allowed me to perform the operation on the key, however it refused to read my public key. I found out that while NitroKey said OpenSC was the best tool to use with the nitrokey, OpenSC didn't support reading curve25519 keys! Later I found that there was a single test that was written in OpenSC which used the PKCS11 interface to generate and verify a shared-secret on the hardware device but this functionality wasn't exposed to users in any way. Technically, OpenSC could be used to test that X25519 operations worked on a hardware device but with no user control over the process. This realization set the stage for the rest of the project: technically the functionality is there but no-one has a practical implementation yet, that I could find.
 
 This gave me enough information to start looking into curve25519 support in OpenSSL. Curve 25519 support was a relatively recent addition in version 1.1 of the program\cite{noauthor_support_nodate}.
-After digging through the OpenSC tool and reading the OpenSSL function documentation, I was able to upgrade how OpenSC read public-keys during key derivation and get the previous command working.
-Then I wrote some tests which automated this process and could verify if the functionality was broken in the future.
+After digging through the OpenSC tool and reading the OpenSSL function documentation, I was able to upgrade how OpenSC read public-keys during key derivation and expand it's functionality to support X25519 and get the previous command working.
+Once I had OpenSC working to perform X25519 on the key, I wrote a test that would perform the operation on the security key and also perform the operation as the other party but in software-only mode, using OpenSSL. At the end the test would verify the output was the same for both operations, thereby confirming the operations was producing valid output.
 \subsection {my subsection}
 Minor points
 
 \section{pkclient}
-I knew if I had key derivation working on the hardware key, my first hurdle was over. The next hurdle was deciding on how to integrate my desired functionality into the WireGuard program. I attempted to modify and build a kernel module but I got no where working by myself for a few days. Working with OpenSC felt like enough C code for the meantime and I needed to make progress on my project. There is a Golang version of WireGuard that appeared easy to read and it's portable, meaning it works on many different versions. I settled on trying to get that working. So I learned Go in a week and wrote pkclient. It shows. I had a lot of issues with getting the modules to work  but I figured out how to override modules and point them to local copies that had been modified.
+Once I had X25519 working on the security key, the next logical step was to integrate this functionality into a program that could handle the various states that the hardware-key system could be in, abstracting the functionality enough so that it could be easily integrated into WireGuard.  I attempted to modify and build a kernel module but I got no where working by myself for a few days. Working with OpenSC felt like enough C code for the meantime and I needed to make progress on my project. There is a Go language (Golang) version of WireGuard that appeared easy to read and it's portable, meaning it works on many different versions. I decided to focus my efforts into modifying that version of WireGuard because it would be the fastest way to demonstrate the functionality of my program.
+The Go programming language has good support for modules which allows programs to easily expand their functionality by importing other code modules. After some more research I realized I could create a Golang module that handled the security-key interface and exposed it to a calling program. 
+Pkclient can handle logging into the security-key, prompting the caller for the pin, if the pin is not saved in the configuration file (optional), finding the appropriate x25519-key on the security-key and finally pkclient can handle key derivation requests and returning the derived-key back to the caller.
 
-PKCS11 is the standard interface for interacting with hardware security modules, logging into them and requesting operations, getting output back, all while the keys stay protected on the device.
+\section{configuration}
+WireGuard configuration on the command-line is handled via a separate program called wireguard-tools \cite{noauthor_wireguard-tools_2022}. This program handles parsing a plain-text configuration file and turns the configuration directives into API calls to the separately running WireGuard daemon which configures the virtual-interface. I wanted my program to conform as closely as possible to the WireGuard reference implementation, so I made modifications to the wireguard-tools program and added support for an 'HSM' line in the plain-text configuration file. 
+\begin{figure}[h]
+\includegraphics[width=8cm]{paper/images/wg_conf_hsm.png}
+\end{figure}
+This modification removes the requirement for defining and storing the private-key in the plain-text file and instead, tells the program what PKCS#11 library path, the slot on the key and optionally, the pin required to access the slot.
+
+The inner-workings of the PKCS\#11 interface are out of scope for this document, however it suffices to say that for interfacing with a security-key, PKCS\#11 requires a slot ID and a pin-number for that slot, before the calling program an request operations on objects held on the slot. The PKCS\#11 interface will inform the caller if they successfully logged into the slot and if the requested operation suceeded or not.
+
+Security is a balancing act between overall system security and user-convenience. Making a system more secure can often come at expense of user-convenience. Pkclient was written to give the user a choice in saving the pin-number in the configuration or omit it entirely. When the pin is omitted and the configuration file is read to wireguard-hsm, the program will prompt the user for the pin before the virtual interface is fully configured. If pkclient doesn't have the pin number for the given slot, it cannot be sure the key is configured properly. Saving the security-key pin-number in the configuration file reduces the security of our system a little but a given-user's threat-model may not require that the pin remains a secret since the user has physical control over the token. This case is called in out THREAT_MODEL_REFERENCE
+
+
+PKCS\#11 is the standard interface for interacting with hardware security modules, logging into them and requesting operations, getting output back, all while the keys stay protected on the device.
 My next step for incremental building was to create an interface program that could login to a hardware key, find a curve25519 key and perform key derivation operations.
+
+\chapter {threat-model}
+WireGuard has been
+\section{improving WG}
+Our primary threat-model guards against malware that runs on user's computer and gains access to the plain-text configuration file for WireGuard, leaking the private key which gives the bad-actors the ability to connect to the configured wireguard-peers undetected, as the legitimate user.
 
 \chapter {Data1}
 
@@ -141,8 +160,12 @@ More issues discussed here
 \chapter {CONCLUSION AND FUTURE WORK}
 
 
-\section {Future Research}
-What I think future research would look like
+
+\section {Future Work}
+There are several areas where I would like to improve WireGuard-HSM that have been identified over the course of implementing the program.
+
+\subsection{Pin Handling}
+ If a user chooses not a save the security-key pin in the wireguard-hsm configuration file, then the program must prompt user for the pin. Currently this prompt is very simple and given on the command-line when the user runs WireGuard-HSM. This prompt is easy to miss and wouldn't work very well if WireGuard-HSM was implemented as a kernel module. A better approach would be to have the prompt implemented as a system-dialog window, that appears over any existing windows, making very simple for the user to omit the pin and only enter it when using WireGuard-HSM.
 
 \bibliographystyle{plain}
 \bibliography{references}
