@@ -1,4 +1,138 @@
 
+@misc{noauthor_safecurves_2022,
+	title = {{SafeCurves}: {Introduction}},
+	url = {https://safecurves.cr.yp.to/},
+	urldate = {2022-03-19},
+	journal = {SafeCurves: choosing safe curves for elliptic-curve cryptography},
+	month = mar,
+	year = {2022},
+	keywords = {safe},
+}
+
+@inproceedings{lipp_mechanised_2019,
+	title = {A {Mechanised} {Cryptographic} {Proof} of the {WireGuard} {Virtual} {Private} {Network} {Protocol}},
+	doi = {10.1109/EuroSP.2019.00026},
+	abstract = {WireGuard is a free and open source Virtual Private Network (VPN) that aims to replace IPsec and OpenVPN. It is based on a new cryptographic protocol derived from the Noise Protocol Framework. This paper presents the first mechanised cryptographic proof of the protocol underlying WireGuard, using the CryptoVerif proof assistant. We analyse the entire WireGuard protocol as it is, including transport data messages, in an ACCE-style model. We contribute proofs for correctness, message secrecy, forward secrecy, mutual authentication, session uniqueness, and resistance against key compromise impersonation, identity mis-binding, and replay attacks. We also discuss the strength of the identity hiding provided by WireGuard. Our work also provides novel theoretical contributions that are reusable beyond WireGuard. First, we extend CryptoVerif to account for the absence of public key validation in popular Diffie-Hellman groups like Curve25519, which is used in many modern protocols including WireGuard. To our knowledge, this is the first mechanised cryptographic proof for any protocol employing such a precise model. Second, we prove several indifferentiability lemmas that are useful to simplify the proofs for sequences of key derivations.},
+	booktitle = {2019 {IEEE} {European} {Symposium} on {Security} and {Privacy} ({EuroS} {P})},
+	author = {Lipp, Benjamin and Blanchet, Bruno and Bhargavan, Karthikeyan},
+	month = jun,
+	year = {2019},
+	keywords = {Elliptic curve cryptography, Protocols, Standards, VPN, Virtual private networks, computational model, security protocols, verification},
+	pages = {231--246},
+}
+
+@inproceedings{hulsing_post-quantum_2021,
+	title = {Post-quantum {WireGuard}},
+	doi = {10.1109/SP40001.2021.00030},
+	abstract = {In this paper we present PQ-WireGuard, a post-quantum variant of the handshake in the WireGuard VPN protocol (NDSS 2017). Unlike most previous work on post-quantum security for real-world protocols, this variant does not only consider post-quantum confidentiality (or forward secrecy) but also post-quantum authentication. To achieve this, we replace the Diffie-Hellman-based handshake by a more generic approach only using key-encapsulation mechanisms (KEMs). We establish security of PQ-WireGuard, adapting the security proofs for WireGuard in the symbolic model and in the standard model to our construction. We then instantiate this generic construction with concrete post-quantum secure KEMs, which we carefully select to achieve high security and speed. We demonstrate competitiveness of PQ-WireGuard presenting extensive bench-marking results comparing to widely deployed VPN solutions.},
+	booktitle = {2021 {IEEE} {Symposium} on {Security} and {Privacy} ({SP})},
+	author = {Hülsing, Andreas and Ning, Kai-Chun and Schwabe, Peter and Weber, Florian and Zimmermann, Philip R.},
+	month = may,
+	year = {2021},
+	note = {ISSN: 2375-1207},
+	keywords = {Adaptation models, Authentication, Privacy, Protocols, Security, Standards, Virtual private networks},
+	pages = {304--321},
+}
+
+@inproceedings{wu_sewg_2020,
+	title = {{SeWG}: {Security}-{Enhanced} {WireGuard} for {Android} {Based} on {TEE}},
+	shorttitle = {{SeWG}},
+	doi = {10.1109/TrustCom50675.2020.00235},
+	abstract = {WireGuard, a novel VPN proposed in 2017, has been widely accepted in the industry, since it is simpler, leaner and more efficient than traditional VPNs. However, WireGuard ignores the risks of key stolen and abused on both desktop and mobile platform. These vulnerabilities might be utilized by attackers to sneak into the protected network through VPN tunnel provided by WireGuard easily without permission. It is especially obvious on mobile platforms, since they are mostly online all day and the attack scenarios are more complicated and changeable. In this paper, we propose an enhanced WireGuard Android version called SeWG based on TEE. We use TEE (Trusted Execution Environment) technology to achieve secure key storage, preventing the misuse of the private key. And we design corresponding dynamic authentication mechanisms for user mode and kernel mode respectively, to prevent malware from sneaking into the secure tunnel. Finally, we implement SeWg scheme on QSEE, the TEE platform developed by Qualcomm. Our experimental results demonstrate that SeWG can work well with high efficiency.},
+	booktitle = {2020 {IEEE} 19th {International} {Conference} on {Trust}, {Security} and {Privacy} in {Computing} and {Communications} ({TrustCom})},
+	author = {Wu, Yongkang and Shan, Yiwei and Wang, Zhichao and Zhang, Pengcheng and He, Min and Liu, Jihong},
+	month = dec,
+	year = {2020},
+	note = {ISSN: 2324-9013},
+	keywords = {Authorization, Industries, Kernel, Malware, Privacy, Secure storage, VPN, WireGuard, Key protection, Authorization, Mobile security, Trusted execution environment, Virtual private networks},
+	pages = {1711--1717},
+}
+
+@article{hulsing_post-quantum_2021-1,
+	title = {Post-quantum {WireGuard}},
+	issn = {1081-6011},
+	language = {eng},
+	journal = {Proceedings - IEEE Symposium on Security and Privacy},
+	author = {Hülsing, A. and Ning, K.-C. and Schwabe, P. and Weber, F. and Zimmermann, P. R.},
+	year = {2021},
+	pages = {511--528},
+}
+
+@article{omotosho_threat_2019,
+	title = {Threat {Modeling} of {Internet} of {Things} {Health} {Devices}},
+	volume = {14},
+	issn = {1936-1610},
+	doi = {10.1080/19361610.2019.1545278},
+	abstract = {For a number of health conditions, the number of Internet of Things (IoT) devices available for self and remote monitoring are growing rapidly, and users are also increasing. In the same vein, cyber criminals are putting lots of effort into making these devices unsafe for users, and this has generated growing privacy concerns for both users and manufacturers. In this article, a threat model is designed for selected IoT health devices. Based on the device assets and access points, device threats were identified using the STRIDE model and ranked using a threat-risk ranking model called DREAD. Some countermeasures to mitigate each of the identified threats in the selected devices were also proposed. A Web system that presents the model was created and enables the users of devices, manufacturers, and professionals to view possible threats and severity based on the devices' risk scores. This model will benefit both the designers and users of health IoT devices in improving products' security and understanding devices' privacy risk, respectively.},
+	language = {eng},
+	number = {1},
+	journal = {Journal of applied security research},
+	author = {Omotosho, Adebayo and Ayemlo Haruna, Benjamin and Mikail Olaniyi, Olayemi},
+	year = {2019},
+	note = {Publisher: Routledge},
+	keywords = {DREAD, Internet of Things, STRIDE, health, modeling, threat},
+	pages = {106--121},
+}
+
+@misc{donenfeld_protocol_2018,
+	title = {Protocol \& {Cryptography} - {WireGuard}},
+	url = {https://www.wireguard.com/protocol/},
+	language = {en},
+	urldate = {2021-07-06},
+	author = {Donenfeld, Jason A.},
+	year = {2018},
+}
+
+@misc{perrin_noise_2017,
+	title = {The {Noise} {Protocol} {Framework}},
+	url = {http://noiseprotocol.org/noise.html},
+	language = {English},
+	urldate = {2022-03-13},
+	author = {Perrin, Trevor},
+	year = {2017},
+}
+
+@article{donenfeld_formal_2018,
+	title = {Formal {Verification} of the {WireGuard} {Protocol}},
+	url = {https://www.wireguard.com/papers/wireguard-formal-verification.pdf},
+	abstract = {WireGuard, the secure network tunnel, uses an interesting DiﬃeHellman authenticated key exchange protocol based on NoiseIK, custom tailored to suit its unique operational requirements. This paper enumerates the security properties of this key exchange and then explores the formal veriﬁcation of such properties. The end result is a formally veriﬁed secure network tunnel protocol.},
+	language = {en},
+	author = {Donenfeld, Jason A and Kevin Milner},
+	year = {2018},
+	pages = {11},
+}
+
+@misc{noauthor_curve25519_nodate,
+	title = {Curve25519: high-speed elliptic-curve cryptography},
+	url = {https://cr.yp.to/ecdh.html},
+	urldate = {2022-03-14},
+	keywords = {curve25519},
+}
+
+@misc{noauthor_cryptsoft_nodate,
+	title = {Cryptsoft},
+	url = {https://www.cryptsoft.com/pkcs11doc/},
+	urldate = {2022-03-14},
+	keywords = {oasis, pkcs11},
+}
+
+@inproceedings{appelbaum_tiny_2019,
+	address = {Cham},
+	series = {Lecture {Notes} in {Computer} {Science}},
+	title = {Tiny wireguard tweak},
+	isbn = {978-3-030-23695-3},
+	doi = {10.1007/978-3-030-23696-0_1},
+	abstract = {We show that a future adversary with access to a quantum computer, historic network traffic protected by WireGuard, and knowledge of a WireGuard user’s long-term static public key can likely decrypt many of the WireGuard user’s historic messages. We propose a simple, efficient alteration to the WireGuard protocol that mitigates this vulnerability, with negligible additional computational and memory costs. Our changes add zero additional bytes of data to the wire format of the WireGuard protocol. Our alteration provides transitional post-quantum security for any WireGuard user who does not publish their long-term static public key – it should be exchanged out-of-band.},
+	language = {eng},
+	publisher = {Springer},
+	author = {Appelbaum, Jacob R. and Martindale, Chloe R. and Wu, Sinli Peter and Nitaj, Abderrahmane and Rachidi, Tajjeeddine and Buchmann, Johannes},
+	year = {2019},
+	note = {Book Title: Lecture notes in computer science
+ISSN: 1611-3349},
+	keywords = {Mass surveillance, Network protocol, Post-quantum cryptography, Privacy, Security, VPN, WireGuard, wg\_tweak},
+	pages = {3--20},
+}
+
 @misc{noauthor_wireguard-tools_2022,
 	title = {wireguard-tools — tools for configuring {WireGuard}},
 	copyright = {GPL-2.0},
@@ -10,12 +144,6 @@
 	year = {2022},
 	note = {original-date: 2019-12-26T13:28:28Z},
 	keywords = {wireguard-tools},
-}
-
-@misc{noauthor_noise_nodate,
-	title = {The {Noise} {Protocol} {Framework}},
-	url = {http://noiseprotocol.org/noise.html},
-	urldate = {2022-03-13},
 }
 
 @article{he_security_2018,
@@ -97,14 +225,6 @@
 	urldate = {2021-07-06},
 }
 
-@misc{donenfeld_protocol_nodate,
-	title = {Protocol \& {Cryptography} - {WireGuard}},
-	url = {https://www.wireguard.com/protocol/},
-	language = {en},
-	urldate = {2021-07-06},
-	author = {Donenfeld, Jason A.},
-}
-
 @misc{noauthor_discover_nodate,
 	title = {Discover {YubiKey} 5 {\textbar} {Strong} {Authentication} for {Secure} {Login}},
 	url = {https://www.yubico.com/products/yubikey-5-overview/},
@@ -122,7 +242,7 @@
 	journal = {Nitrokey GmbH},
 }
 
-@inproceedings{wu_sewg_2020,
+@inproceedings{wu_sewg_2020-1,
 	title = {{SeWG}: {Security}-{Enhanced} {WireGuard} for {Android} {Based} on {TEE}},
 	shorttitle = {{SeWG}},
 	doi = {10.1109/TrustCom50675.2020.00235},
@@ -1032,7 +1152,7 @@ The sensors use Bluetooth LE to commun...},
 	urldate = {2020-05-10},
 }
 
-@misc{noauthor_go_nodate,
+@misc{noauthor_go_nodate-1,
 	title = {The {Go} {Programming} {Language} {Specification} - {The} {Go} {Programming} {Language}},
 	url = {https://golang.org/ref/spec},
 	urldate = {2020-05-10},
@@ -1988,7 +2108,7 @@ Therefore, the same attacks that have been practical on MD5 since 2009 are now p
 	urldate = {2019-10-23},
 }
 
-@misc{noauthor_zotero_nodate,
+@misc{noauthor_zotero_nodate-1,
 	title = {Zotero {\textbar} {Email} validation},
 	url = {https://www.zotero.org/user/validate/6221871d0db311b0e54f},
 	urldate = {2019-10-22},
