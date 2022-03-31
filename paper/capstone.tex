@@ -111,10 +111,31 @@ The WireGuard protocol and handshake has been analyzed and dissected without any
 \subsection{Curve25519 public/private key pairs}
 A feature of Curve25519 is that any 32-byte value is a valid private key and unlike some other elliptic curves, Curve25519 requires no key validation, to avoid small subgroup attacks, and is immune to some classes of timing attacks\cite{noauthor_safecurves_2022}\cite{sasdrich_implementing_2015}.  Deriving the public key from the private key is fast enough that programs such as WireGuard don't need to store the client's public key in in the configuration file and stores only the private key. When WireGuard starts, it reads it reads the saved private key and derives the public key. 
 
-WireGuard 
+\section {Identity and handshake initiation}
+\label{handshake_message}
+
+\begin{figure}[ht]
+\includegraphics[width=12cm]{paper/images/Wg_hand_init.drawio.png}
+\caption{simplified WireGuard handshake initiation message}
+\label{fig:hand_init}
+\end{figure}
+In the WireGuard protocol, both parties are identified by their static public key's. WireGuard refers to parties as an initiator and a responder, since there is no strict definition of client or server. The public keys should be securely exchanged, before a handshake can take place. WireGuard leaves the exchange process up to the users. A handshake is performed using an initiation message, sent by the initiator to the responder. The most important fields in the handshake message are shown in Figure \ref{fig:hand_init}.
+
+To create an initiation message, the initiator generates an ephemeral, Curve25519 key-pair The 32-byte ephemeral public key is added to the message. The initiator's static public key is encrypted using 
+The sender's index is a randomly generated 4-byte value. It is used as a peer's chosen handshake session id.
+The responder's public key used as key to MAC 1. This initiation message contains an encrypted form of the initiator's public key
+
+The contents of the initiation message are authenticated using MAC 1.
+A MAC is used to protect the initiation message, with the MAC key being the responders public key.
+
+responder, an initiator is identified by their ability to decrypt messages encrypted with the client's public key, and cannot be revoked, except by manually notifying and removing the client’s public key from all servers. As mentioned previously, in WireGuard, key management is intentionally left up to the users and administrators. There is no certificate revocation mechanism or expiration of client and server keys.
+
+TODO: timestamp description
+
+MAC2 is an optional MAC and is used only when the anti-DDoS mechanism is enabled for a given responder. 
 
 \section{compatibility}
-One key area to consider when modifying WireGuard is that because it has no negotiation of cryptographic primitives, if researches or contributors want to modify WireGuard, compatibility must be considered. Any project fork that modifies the overall protocol will introduce client incompatibility and be restricted to working with only themselves. WireGuard-HSM is designed to improve the security of the current protocol while not introducing any incompatibility. This is verified by the ability of WireGuard-HSM to perform a successful handshake and pass traffic with the unmodified Ubuntu peer in section \label{TODO}
+Compatibility is an important area of consideration when modifying WireGuard. Since WireGuard has no negotiation of cryptographic primitives, any project that modifies the overall protocol, will introduce client incompatibility and be restricted to working with only themselves. WireGuard-HSM is designed to improve the security of the current protocol while not introducing any client-incompatibility. This is verified by the ability of WireGuard-HSM to perform a successful handshake and pass traffic with the unmodified Ubuntu peer in section \label{TODO}
 
 
 
@@ -173,7 +194,7 @@ This modification removes the requirement for defining and storing the private-k
 
 The detailed workings of the PKCS\#11 interface are out of scope for this document, however it suffices to say that for interfacing with a security-key, PKCS\#11 requires a slot ID and a secret pin-number for that slot, to enable privileged operations like key-signing or key derivation. The PKCS\#11 interface will inform the caller if they successfully logged into the slot and if the requested operation succeeded or not.
 
-Security is a balancing act between overall system security and user-convenience. Making a system more secure can often come at expense of user-convenience. After writing the initial version of pkclient, I added in the functionality to give the user a choice in saving the pin-number in the configuration or omit it entirely. When the pin is omitted and the configuration file is read to WireGuard-HSM, the program will prompt the user for the pin before the virtual interface is fully configured. If pkclient doesn't have the pin number for the given slot, it cannot be sure the hardware security key is configured properly. Saving the security-key pin-number in the configuration file reduces the security of our system a little and I point this out in the threat model. 
+Security is a balancing act between overall system security and user-convenience. Making a system more secure can often come at expense of user-convenience. After writing the initial version of pkclient, I added in the functionality to give the user a choice in saving the pin-number in the configuration or omit it entirely. When the pin is omitted and the configuration file is read to WireGuard-HSM, the program will prompt the user for the pin before the WireGuard interface is configured. If pkclient doesn't have the pin number for the given slot, it cannot be sure the hardware security key is configured properly. Saving the security-key pin-number in the configuration file reduces the security of our system a little and I point this out in the threat model. 
 
 
 PKCS\#11 is the standard interface for interacting with hardware security modules, logging into them and requesting operations, getting output back, all while the keys stay protected on the device.
@@ -182,16 +203,19 @@ My next step for incremental building was to create an interface program that co
 
 
 \section {Methodology}
-In order to evaluate what I have done, I will do XYZ and present my findings
+I will perform a comparative threat model analysis of the reference implementation and WireGuard-HSM. This analysis will show the relative strengths and weaknesses of the designs and what I have improved on.
 
-\chapter {Threat Models}
+I will also use some traditional software metrics to evaluate the project.
+
+\chapter {Evaluation}
+\section{Threat models analysis}
+
+\subsection {WireGuard - Reference Implementation}
 \label{section:tm}
-
-\section {WireGuard - Reference Implementation}
 
 Here I present my analysis of the reference implementation of WireGuard. This threat model is focused on WireGuard's handling of the private key and the relevant security controls and assets.
 
-As mentioned previously, in WireGuard, key management is intentionally left up to the users and administrators. On a given server, a client is solely identified by their ability to decrypt messages encrypted with the client's public key, and cannot be revoked, except by manually notifying and removing the client’s public key from all servers. There is no certificate revocation mechanism or expiration of client and server keys.
+
 
 For example, on a Linux laptop configured as a WireGuard peer to a server online, the private key is held in a plain-text file along with the server’s public key and IP or DNS address. See figure \ref{fig:wg_config}
 This file is supposed to be secured by file-system permissions alone, which when properly configured, allow only privileged users to read the file. File-system enforcement is left up to the user to ensure it's safety. 
@@ -231,6 +255,17 @@ There are two main threats to this privacy.  malware infecting a computer runnin
 \caption{A threat model for WireGuard-HSM - data flow diagram}
 \label{fig:wg_hsm_dfd}
 \end{figure}
+
+\section{software metrics}
+
+\subsection{performance}
+WireGuard-HSM makes use of a USB connected security key. The cryptographic function to derive a shared key is now locked behind a small embedded device that is much less powerful than the computer running it. I wanted to see what performance impacts my design might introduce to the system.
+
+Go language provides simple and powerful ways to benchmark functions using the "time" library.
+In order to benchmark the performance of the implementations, I added a timing function that saves the current time at the beginning of the sharedSecret() in WireGuard and DeriveNoise() in pkclient. The print statement that indicates how long the call took is deferred, meaning  once the surrounding function returns, the deferred function executes. 
+The sharedSecret() function is responsible for taking a public key as input and deriving a shared secret key. The sharedSecret() is a function of a private-key object.
+
+WireGuard-HSM will still make use of sharedSecret() but only after generating the ephemeral session keys.
 
 
 \chapter {Discussion of Results}
