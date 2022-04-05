@@ -167,8 +167,8 @@ At this point, I realized that all of OpenSC's interaction with the security key
 \section{interfacing}
 At this stage I had X25519 working on the security key and I understood more about PKCS\#11 and how other programs used it. This interfacing part was the area of my proposal that I understood the least. Before I started the project, I wasn't that clear about exactly how I would 'connect' X25519 operations and WireGuard. Using my software development skills that I learned at the UW, I decided it would be best to encapsulate the functionality in a program that would act as the go-between. Handing the various states of the program, user-input and error states. I could create my own limited API for a calling program to request specific actions on the security key. This approach would also reduce the amount of work I would have to do in WireGuard itself.
 
-\section{WireGuard target}
-I had assumed at the beginning of the project that I should implement my program by modifying the Linux kernel module version of WireGuard. I tried for a few days to learn how to modify and build a kernel module, which has gotten a lot more complicated and lengthy with module signing and the overall size of the Linux kernel. I had written and built a kernel module in CSS 537 but that module didn't need to interact with external libraries, handle bi-directional user interactions. After reading the WireGuard kernel module, I decided to try reading through the Go language version of WireGuard. This version is implemented as a standalone program that can run on most operating systems. This version was easier to comprehend and understand the program flow. My project is about implementing new functionality and evaluating the system, so I decided to focus my efforts into modifying the Go version of WireGuard.
+\section{WireGuard implementation choice}
+I had assumed at the beginning of the project that I should implement my program by modifying the Linux kernel module version of WireGuard. I tried for a few days to learn how to modify and build a kernel module, which has gotten a lot more complicated and time-consuming with things such as module signing and the sheer size of the Linux kernel. I had written and built a kernel module in CSS 537 but that module didn't need to interact with external libraries or handle bi-directional user interactions. After reading the WireGuard kernel module, I decided to try reading through the Go language version of WireGuard. This version is implemented as a standalone program that can run on most operating systems. This version was easier to comprehend and understand the program flow. My project is about implementing new functionality and evaluating the system, so I decided to focus my efforts into modifying the Go version of WireGuard.
 The Go programming language has good support for modules which allows programs to easily expand their functionality by importing other code modules. After some more research, I decided to create a Golang module that handled the physical security-key interface and expose a restricted set of functionality to a calling program. 
 
 \section{pkclient}
@@ -225,34 +225,41 @@ Here I present my analysis of the reference implementation of WireGuard. This th
 \label{fig:wg_ref_dfd}
 \end{figure}
 
-
+\subsection{assets}
 The file system on Alice's computer contains the WireGuard configuration file \ref{fig:wg_config}. 
 Asset A01 is Alice's Curve25519 static private key. Asset A02 is Bob's connection information consisting of his Curve25519 static public key and DNS address. It is important to note that in this threat model, both of these assets reside in the same location. Access to the configuration file gives access to both assets.
+Asset 03 is the label for any potential assets at the other-side of the WireGuard VPN tunnel. Access to Bob's machine might be a highly valuable asset or Bob's network access might be the highly valuable asset. Our model combines these possibilities into 'Peer Assets' for simplification.
 
-The primary source of access control in WireGuard's reference implementation for A01 and A02 is C01: proper file system permissions. Most of the documentations (TODO CONFIRM) indicate that the permissions should be set on the WireGuard configuration file to allow only administrator access and restrict access by unprivileged users. For most of the reference implementations that I can find, this is not an enforced measure, meaning WireGuard will still start and not complain if the configuration file permissions are insufficient. 
+\subsection{security controls}
+Access control in WireGuard's reference implementation for A01 and A02 is C01: proper file system permissions. Most of the documentations (TODO CONFIRM) indicate that the permissions should be set on the WireGuard configuration file to allow only administrator access and restrict access by unprivileged users. For most of the reference implementations that I can find, this is not an enforced measure, meaning WireGuard will still start and not complain if the configuration file permissions are insufficient. 
+
+Access control C02, access to each WireGuard peer, is the public key trust system implemented by WireGuard. See section \ref{handshake_message} for more detail.
 
 \section{Threat Actor 1}
-Let us consider our primary threat, TA01: a piece of malware that has gained access to Alice's computer by some means. A plausible infection scenario might be that the malware has been delivered to Alice's machine via a compromised website advertisement that is exploiting a new web-browser vulnerability in order to escape the web-browser protections and read files on the local machine.  This malware has been programmed to look for and harvest assets on infected hosts. In our case it will look for common filenames or patterns within files that look like WireGuard configuration files.  
+The Primary threat to our system is TA01: a piece of malware that has gained access to Alice's computer by some means. A plausible infection scenario might be that the malware has been delivered to Alice's machine via a compromised website advertisement that is exploiting a new web-browser vulnerability in order to escape the web-browser protections and read files on the local machine.  This malware has been programmed to look for and harvest assets on infected hosts. In our case it will look for common filenames or patterns within files that look like WireGuard configuration files.  
 \subsection{insufficient permissions}
 If TA01 gains read-only access a single time to Alice's computer and the file system permissions were not correctly set on the WireGuard configuration file, then the malware gains access to A01 and A02. Access to these assets results in loss of A03 by bypassing C02. See section \ref{impersonation} to see how this works.
 
 \subsection{sufficient permissions}
-If C01 is configured properly, then TA01 will have a more difficult time gaining access to A01 and A02. This offers a single layer of security so TA01 will need to perform a pivot in order to bypass the security control C01. Exploit chains are common-place in today's security field so let's consider an attack that uses more than one vulnerability. Now that TA01 has access to Alice's computer, it will need to pivot in order to bypass C01. I will present three different areas of attack that could be used to pivot. Chain an exploit which results in one of the following: gaining administrative privileges, modify file system permissions, trick a privileged process into disclosing the file contents. This is not an exhaustive list of pivots but these three are reasonable scenarios. Once any single one of these pivots is performed, then TA01 has access to A01 and A02 which results in loss of A03 by bypassing C02.
+If C01 is configured properly, then TA01 will have a more difficult time gaining access to A01 and A02. This offers a single layer of security so TA01 will need to perform a pivot in order to bypass the security control C01. Exploit chains are common-place in today's security field so let's consider an attack that uses more than one vulnerability. Now that TA01 has access to Alice's computer, it will need to pivot in order to bypass C01. I will present three different areas of attack that could be used to pivot. Exploit chaining is a popular technique which could result in one of the following scenarios: gaining administrative privileges, modify file system permissions, trick a privileged process into disclosing the file contents. This is not an exhaustive list of pivots but these three are reasonable scenarios. Once any single one of these pivots is performed, then TA01 has access to A01 and A02 which results in loss of A03 by bypassing C02.
 
 \section{Threat Actor 2}
 Our second threat actor is a malicious user who gains direct or indirect access to Alice's computer. 
 
-Let us consider the in-direct method first since it's very common-place. This could be performed by this threat actor using social engineering tactics such as a phone-call masquerading as someone from Alice's IT department, asking her to in some way disclose the contents of the WireGuard configuration file, leading to disclosure of assets A01 and A02.
-
 In a direct method of attack, the second threat actor gains physical access to Alice's laptop and uses some technical or non-technical exploit to read the hard-drive. A technical exploit might be a disk-encryption key recovery vulnerability, allowing TA02 access to the hard drive. TODO expand on this section
+
+The indirect method of attack could be performed by a threat actor using social engineering tactics such as a phone-call masquerading as someone from Alice's IT department, asking her to in some way disclose the contents of the WireGuard configuration file, leading to disclosure of assets A01 and A02.
+
+
 \subsection{off-line access}
 If Alice's laptop is not protected by hard-drive encryption, then it is trivial for an attacker who has physical access to a laptop to mount and read the contents of the file system on the target device, leading to loss of A01 and A02.
 
 \section{Vulnerabilities}
-Once any of the previously described weaknesses and have been taken advantage of by a threat, and the threat actor gains access to assets A01 and A02, this creates two different vulnerabilities in our WireGuard system for Alice and Bob. TODO (define CIA Triad earlier and define impersonation and DOS)
+Once any of the previously weaknesses and have been taken advantage of by a threat, and the threat actor gains access to assets A01 and A02, this creates two different vulnerabilities in our WireGuard system for Alice and Bob. In the CIA model of security, these vulnerabilities threaten confidentially and availability. TODO (define CIA Triad earlier and define impersonation and DOS)
 \subsection{impersonation}
 \label{impersonation}
-In order to perform a WireGuard handshake as Alice, all a threat actor needs is Alice's private key (A01) and Bob's public key (A02). With these two pieces of information, a threat can now effectively impersonate Alice from any computer in the world, almost undetected. I discuss the situation in which the attack is detected in the next section \ref{dos}. Loss of A01 and A02 allows for bypassing the public key trust in C02, for any peer found in the configuration file, which is A02. This gives the threat actor access to any assets that are held on Bob's computer or network. VPN's are commonly used as the first layer of defense for network access, so A03 could be access to a network resource that is hidden behind the WireGuard VPN. It is reasonable to assume this attack could also be the first step in an exploit chain to gain access to more assets. 
+In order to perform a WireGuard handshake as Alice, all a threat actor needs is Alice's private key (A01) and Bob's public key (A02). With these two pieces of information, a threat can now effectively impersonate Alice from any computer in the world, almost undetected. I will discuss how this attack might be detected in the next section \ref{dos}. Loss of A01 and A02 allows for bypassing the public key trust in C02, for any peer found in the configuration file, which is A02. This gives the threat actor access to any assets that are held on Bob's computer or network. VPN's are commonly used as the first layer of defense for network access, so A03 could be access to a network resource that is hidden behind the WireGuard VPN. It is reasonable to assume this attack could also be the first step in an exploit chain to gain access to more assets.
+This threatens confidentiality in our system because non-authorized parties can now masquerade as authorized ones.
 
 \subsection{Denial-of-Service}
 \label{dos}
@@ -260,27 +267,60 @@ If asset disclosure is not the goal of an attacker then denial of service is a v
 
 This denial of service attack would not be noticed by Bob because his WireGuard process thinks he has a legitimate session established with Alice and will silently drop other connection attempts. Alice would only notice that she is unable to establish a session with Bob. Alice would have to communicate with Bob via alternative means, and have him look at his computer's WireGuard session output, then they would need to note that Alice's session is currently established and what remote IP has established the session.
 
+This attack threatens availability in our system because Alice's connection to Bob's resources can be denied by a malicious third-party now.
+
 ===================================
+
+\subsection{Threat Modeling System state assumptions}
+Assumptions about program and system state. When considering diagramming and system, we need to make several assumptions about the system state. That is, What doe the use case look like? How are the users interacting with the system? What mistakes could the user make when using this system? Does the model we are using capture all of them?
+I want to draw attention to key designs about the system and it's basic parts related to private key handling.
+Alice inserts in the hardware security key when she intends to use WireGuard to connect to Bob. Alice enters her security key pin every time when using it. 
+It is important to talk about the various state of a system. There are almost 4 different threat models for this system because of the PIN/NO pin option and then physical handling of the security pin
+
+I will talk about the situations that arise from these alternative situations that these previous statements pose after the threat model, discussion in a section called ??Extra threats??
+    ex: if Alice leaves her security-key in all of the time, like a bad user, then this causes a new issue for the system, mainly, if the malware gets the pin number saved in the configuration file, then it could create a new WireGuard connection to Bob, if it had full system privileges.
+    What would improve this possibility could be using a Security Key that uses a touch button for login, or a bio-metric reader. These configurations are not yet offered together but they exist in independent implementations for example yubico sells a security key that has fingerprint reader needed for user authentication\cite{yubico_yubikey_2022}. 
 
 
 \section{WireGuard-HSM Threat model}
-Here I present my threat model analysis of the WireGuard-HSM. This threat model is also focused on WireGuard-HSM's asset handling related to the private key and peer public keys, the security controls around them and possible threat actors to the system. The computer running WireGuard will be considered Alice's computer and the WireGuard peer Alice connects to is referred to as Bob. Alice's computer has been turned on but Alice has not yet established a WireGuard session to Bob's computer. Refer to section \ref{handshake_message} on how WireGuard establishes a peer session. 
-
+Threat model analysis of the WireGuard-HSM. This threat model is also focused on WireGuard-HSM's asset handling related to the private key and peer public keys, the security controls around them and possible threat actors to the system. The computer running WireGuard will be considered Alice's computer and the WireGuard peer Alice connects to is referred to as Bob. Alice's computer has been turned on but Alice has not yet established a WireGuard session to Bob's computer. Refer to section \ref{handshake_message} on how WireGuard establishes a peer session. 
 
 \begin{figure}[ht]
-\includegraphics[width=14cm]{paper/images/WGHSM_DFD.drawio.png}
+\includegraphics[width=14cm]{paper/images/WGHSM__NoPin_DFD.drawio}
 \caption{A threat model for WireGuard-HSM - data flow diagram}
 \label{fig:wg_hsm_dfd}
 \end{figure}
 
-\subsection{Threat Actor 1}
-Let us consider our primary threat, TA01: a piece of malware that has gained access to Alice's computer by some means. A plausible infection scenario might be that the malware has been delivered to Alice's machine via a compromised website advertisement that is exploiting a new web-browser vulnerability in order to escape the web-browser protections and read files on the local machine.  This malware has been programmed to look for and harvest assets on infected hosts. In our case it will look for common filenames or patterns within files that look like WireGuard configuration files.  
+\subsection{assets}
+In this model, the private key asset A01 is completely separated from the peer information asset A02. These assets now resided on physically separate systems. 
+===
+
+
+\subsection{security controls}
+Access to asset A01 is now behind two layers of defense. Firstly A01 is now on a physically separate system. Alice must plug in her hardware security key and authenticate with a pin number, Control 01, before cryptographic operations can be performed on A01.
+
+File system permissions are used to protect the Peer Information, asset A02.
+
+Security control C03, access to each WireGuard peer, is the public key trust system implemented by WireGuard. See section \ref{handshake_message} for more detail.
+
+====
+
+\section{Threat Actor 1}
+Let us consider our primary threat, TA01: a piece of malware that has gained access to Alice's computer by some means. A plausible infection scenario might be that the malware has been delivered to Alice's machine via a compromised website advertisement which is exploiting a new web-browser vulnerability in order to escape the web-browser protections and read files on the local machine.  This malware has been programmed to look for and harvest assets on infected hosts. In our case it will look for common filenames or patterns within files, that look like WireGuard configuration files.  
 
 \subsection{insufficient permissions}
-If TA01 gains read-only access a single time to Alice's computer and the file system permissions were not correctly set on the WireGuard configuration file, then the malware gains access only to A02. Access to these assets results in loss of A03 by bypassing C02. See section \ref{impersonation} to see how this works.
+If TA01 gains read-only access a single time to Alice's computer and the file system permissions were not correctly set on the WireGuard configuration file, then the threat gains access to the A02: Peer Information.
 
 \subsection{sufficient permissions}
-If C01 is configured properly, then TA01 will have a more difficult time gaining access to A01 and A02. This offers a single layer of security so TA01 will need to perform a pivot in order to bypass the security control C01. Exploit chains are common-place in today's security field so let's consider an attack that uses more than one vulnerability. Now that TA01 has access to Alice's computer, it will need to pivot in order to bypass C01. I will present three different areas of attack that could be used to pivot. Chain an exploit which results in one of the following: gaining administrative privileges, modify file system permissions, trick a privileged process into disclosing the file contents. This is not an exhaustive list of pivots but these three are reasonable scenarios. Once any single one of these pivots is performed, then TA01 has access to A01 and A02 which results in loss of A03 by bypassing C02.
+If C01: File system permissions, is configured properly, then TA01 will have a difficult time gaining access to A02. This offers a single layer of security so TA01 will need to perform a pivot in order to bypass the file system permissions. Performing a pivot and gaining access to A02 at this point is less lucrative because A01: Alice's private key is still not accessible to the attacker.
+
+\subsection{full compromised host}
+Let's assume that Alice's computer has been fully compromised by TA01. The malware it has gained persistent, privileged access to Alice's machine. The malware could wait until Alice connects her security key and authenticates to Bob. It would need to piggy-back on her legitimate connection but it would also be limited by Alice's actions.
+
+Alice's fully compromised system still doesn't pose a threat to A01 because by it's design, the Nitrokey Start doesn't allow exporting of private key. A user authenticated or not, cannot read the private key held in the NitroKey's key storage.
+Wireguard-HSM decouples two important assets, A01 and A02.
+
+
 
 == NEEDED? ==
 The secrecy of a client's private key is paramount to proper client identification and authorization in WireGuard. WireGuard's design protects many aspects of the key handling that have been error prone in past VPN designs (TODO )
