@@ -81,14 +81,14 @@ Nitrokey Start\cite{noauthor_nitrokey_nodate} or YubiKey\cite{noauthor_discover_
 \chapter {Introduction}
 WireGuard is a new implementation of a Virtual Private Network (VPN) proposed in 2017. A key design feature of WireGuard is the elimination of cryptographic algorithm negotiation between parties and instead, the protocol relies on a fixed-choices for cryptographic primitives. This greatly simplifies the design, implementation and attack surface of the protocol. Another design simplification that WireGuard uses is the management of public and private keys. WireGuard does not use x509 certificates or the traditional PKI infrastructure, instead each parties identity is a 256-bit curve25519-based public key. This public key is referred to as the static public key because it doesn't expire and is the starting point from which ephemeral public keys for every session are generated. The static public keys of the initiator and responder must be pre-shared with both parties respectively, before a successful handshake can be made. 
 
-(TODO: talk about cookie back off mechanism) and uses a novel cookie mechanism with scaling-back-off, built into every implementation, in order to resist DDoS attacks. (RE-WORK SECTION LATER)
+(TODO: talk about cookie back off mechanism) and uses a novel cookie mechanism with scaling-back-off, built into every implementation, in order to resist DOS attacks. (RE-WORK SECTION LATER)
 
 A benefit to the pre-shared static public key requirement, is that any party running WireGuard is resistant to active network enumeration. In order to get a response from a peer, the initiator's message must have knowledge of the responder's public key to get a response packet. 
 
 WireGuard traffic is (TODO: talk about un-encrypted network traffic, it can be see but only 4 types)
 
 The WireGuard VPN has had a successful mainstream adoption, as evidenced by its recent inclusion in many 
-open-source operating systems\cite{donenfeld_wireguard_nodate} as well as a recent native Windows kernel module\cite{noauthor_wireguard-nt_nodate}. MacOS, IOS, Android, FreeBSD and OpenBSD are supported as well.
+open-source operating systems\cite{donenfeld_wireguard_nodate} as well as a recent native Windows kernel module\cite{noauthor_wireguard-nt_nodate}. MacOS, iOS, Android, FreeBSD and OpenBSD are supported as well.
 
 
 
@@ -108,10 +108,34 @@ The WireGuard protocol and handshake has been analyzed and dissected without any
 
 \section {WireGuard Handshake}
 \ It will be necessary to understand the context that the private key is used in and how the WireGuard handshake authenticates clients, when we discuss our threat model in section~\ref{section:tm}. Next I will discuss some of the features of Curve25519 and it's place in WireGuard.
+
 \subsection{Curve25519 public/private key pairs}
-A feature of Curve25519 is that any 32-byte value is a valid private key and unlike some other elliptic curves, Curve25519 requires no key validation, to avoid small subgroup attacks, and is immune to some classes of timing attacks\cite{noauthor_safecurves_2022}\cite{sasdrich_implementing_2015}.  Deriving the public key from the private key is fast enough that programs such as WireGuard don't need to store the client's public key in in the configuration file and stores only the private key. When WireGuard starts, it reads it reads the saved private key and derives the public key. 
+One useful feature of Curve25519 is that any 32-byte value is a valid private key and unlike some other elliptic curves, Curve25519 keys require no key validation. (FIX THIS)This helps avoid small subgroup attacks. Curve25519 keys have also been shown to be immune to some classes of timing attacks\cite{noauthor_safecurves_2022}\cite{sasdrich_implementing_2015}.  Deriving the public key from the private key is fast enough that programs such as WireGuard don't need to store the client's public key in in the configuration file and stores only the private key. When WireGuard starts, it reads it reads the saved private key and derives the public key. 
+
+
+
+// encrypt static key
+	ss := handshake.localEphemeral.sharedSecret(handshake.remoteStatic)
+	Using the local Ephemeral private key and the peer's static public key, derive a shared key.
+	Create a 256-bit encryption key for chacha20poly1350.
+    This key is created by the KDF2 algorithm with the derived key ss as input and the initial chainkey value value (a predetermined, static value but irrelevant for our discussion)
+
+	aead, _ := chacha20poly1305.New(key[:])
+	aead.Seal(msg.Static[:0], ZeroNonce[:], device.staticIdentity.publicKey[:], handshake.hash[:])
+	handshake.mixHash(msg.Static[:])
+
 
 \section {Identity and handshake initiation}
+
+A WireGuard handshake is described as 1.5RTT, meaning
+
+\begin{figure}[ht]
+\includegraphics[width=12cm]{paper/images/handshake_process.drawio.png}
+\caption{informal handshake narration process}
+\label{fig:handshake_process}
+\end{figure}
+
+
 \label{handshake_message}
 
 \begin{figure}[ht]
@@ -119,9 +143,9 @@ A feature of Curve25519 is that any 32-byte value is a valid private key and unl
 \caption{simplified WireGuard handshake initiation message}
 \label{fig:hand_init}
 \end{figure}
-In the WireGuard protocol, both parties are identified by their static public key's. WireGuard refers to parties as an initiator and a responder, since there is no strict definition of client or server. WireGuard assumes that each parties public key is securely exchanged out-of-band. This exchange must take place before a handshake can be performed. A handshake is performed using an initiation message, sent by the initiator to the responder. The most important fields in the handshake message are shown in Figure \ref{fig:hand_init}.
+In the WireGuard protocol, both parties are identified by their static public key's. WireGuard refers to parties as an initiator and a responder, since there is no strict definition of client or server. WireGuard assumes that each party's public key is securely exchanged out-of-band. This exchange must take place before a handshake can be performed. A handshake is performed using an initiation message, sent by the initiator to the responder. The most important fields in the handshake message are shown in Figure \ref{fig:hand_init}.
 
-To create an initiation message, the initiator generates an ephemeral, Curve25519 key-pair The 32-byte ephemeral public key is added to the message. The initiator's static public key is encrypted using 
+To create an initiation message, the initiator generates an ephemeral, Curve25519 key-pair. The ephemeral public key is added to the message. The initiator's static public key is encrypted using ChaCha20Poly1350 AEAD. The encryption key for this field is a derived key, which is derived in-part using the responders static public key.
 The sender's index is a randomly generated 4-byte value. It is used as a peer's chosen handshake session id.
 The responder's public key used as key to MAC 1. This initiation message contains an encrypted form of the initiator's public key
 
@@ -135,8 +159,18 @@ TODO: timestamp description
 MAC2 is an optional MAC and is used only when the anti-DDoS mechanism is enabled for a given responder. 
 
 \section{compatibility}
-Compatibility is an important area of consideration when modifying WireGuard. Since WireGuard has no negotiation of cryptographic primitives, any project that modifies the underlying cryptographic functions or protocol, will introduce client incompatibility and be restricted to working with only themselves. I designed WireGuard-HSM with this in mind. My goal was to improve the security of the current protocol while not introducing any client-incompatibility. This is verified by the ability of WireGuard-HSM to perform a successful handshake and pass traffic with unmodified peers.
+Compatibility is an important area of consideration when modifying WireGuard. Since WireGuard has no negotiation of cryptographic primitives, any project that modifies the underlying cryptographic functions or protocol, will introduce client incompatibility and be restricted to working with only themselves. I designed WireGuard-HSM with this in mind. My goal was to improve the security of the current protocol while not introducing any client-incompatibility. This is later verified by the ability of WireGuard-HSM to perform a successful handshake and pass traffic with an unmodified WireGuard peer.
 
+\section{NitroKey Start}
+\begin{figure}[ht]
+\includegraphics[width=4cm]{paper/images/nitrokey.jpg}
+\caption{A picture of a NitroKey Start}
+\label{nitrokey}
+\end{figure}
+I will give a brief overview of key parts of the NitroKey start. It is hardware security key that connects to a computer via a USB-A interface. It was the only security key at time of writing that supported X25519 operations.
+The security key safeguards private keys by allows authenticated users to perform a strict set of key management and cryptographic function on a slot. A slot typically holds private and public keys. The slot is protected by a user PIN. The whole security key itself is protected by a master pin. The master pin is used to unblock a slot, if a user enters a PIN incorrectly three times. After three incorrect guesses the slot is blocked and even the correct PIN will not work on the slot. The slot must be unblocked using the master key, or the device must be erased and reset.
+
+A security key should only be inserted into a computer when it use is required and should be held by the user, on a key chain or other means. It's separation from the computer is important for creating the best security posture. We will discuss the threats that arise when these procedures are not followed by users in section \ref{wg-hsm-analysis}
 
 \chapter {Project Background}
 
@@ -146,7 +180,7 @@ I was interested in WireGuard when it was announced but it wasn't until a group 
 In Spring quarter of 2021, I took research methods in software development with Dr Erdly. During this course I continued to explore ideas that I had about WireGuard and it's private key handling. I created my final project around WireGuard. In the project, I asked the question, how could WireGuard's private key handling be better? What systems could I create to improve it, and then how could I evaluate those systems?  
 In the final part of the project I create a mock survey of software engineers to rate four of the final designs. I used my own metrics to define my terms (TODO finsh up this back story, get to point about compatibility)
 
-I came up with three designs that would improve key handling in WireGuard and I rated them on implementation, TODO(dig up project and look at ratings)!! In the end I chose the simplest overall design with the biggest risk being that my design relied on a security key produced by a single manufacture. No other manufactuer at the time was making a security key that supported X25519.
+I came up with three designs that would improve key handling in WireGuard and I rated them on implementation, TODO(dig up project and look at ratings)!! In the end I chose the simplest overall design with the biggest risk being that my design relied on a security key produced by a single manufacture. No other manufacturer at the time was making a security key that supported X25519.
 
 \section{starting out}
 
@@ -214,7 +248,7 @@ I will also use some traditional software metrics to evaluate the project.
 \section{Threat models analysis}
 
 \subsection {WireGuard - Reference Implementation}
-\label{section:tm}
+\label{wg-ref-analysis}
 
 
 Here I present my analysis of the reference implementation of WireGuard. This threat model is focused on WireGuard's asset handling related to the private key, the security controls around it and the threat actors that could be lurking on the system. This computer running WireGuard will be considered Alice's computer and the WireGuard peer Alice connects to is Bob. Alice's computer has been turned on but Alice has not yet established a WireGuard session to Bob's computer. Refer to section \ref{handshake_message} on how WireGuard establishes a peer session. 
@@ -283,6 +317,7 @@ I will talk about the situations that arise from these alternative situations th
 
 
 \section{WireGuard-HSM Threat model}
+\label{wg-hsm-analysis}
 Threat model analysis of the WireGuard-HSM. This threat model is also focused on WireGuard-HSM's asset handling related to the private key and peer public keys, the security controls around them and possible threat actors to the system. The computer running WireGuard will be considered Alice's computer and the WireGuard peer Alice connects to is referred to as Bob. Alice's computer has been turned on but Alice has not yet established a WireGuard session to Bob's computer. Refer to section \ref{handshake_message} on how WireGuard establishes a peer session. 
 
 \begin{figure}[ht]
@@ -292,33 +327,49 @@ Threat model analysis of the WireGuard-HSM. This threat model is also focused on
 \end{figure}
 
 \subsection{assets}
-In this model, the private key asset A01 is completely separated from the peer information asset A02. These assets now resided on physically separate systems. 
-===
-
+In this model, the private key asset A01 is completely separated from the peer information asset A02. These assets now resided on physically separate systems. The Peer Assets A03 represent Bob's computer or network access.
 
 \subsection{security controls}
-Access to asset A01 is now behind two layers of defense. Firstly A01 is now on a physically separate system. Alice must plug in her hardware security key and authenticate with a pin number, Control 01, before cryptographic operations can be performed on A01.
-
+Access to asset A01 is now behind two layers of defense. Firstly A01 is now on a physically separate system, the hardware security key. Alice must plug in her hardware security key and authenticate with a PIN, Control 01, before cryptographic operations can be performed on A01 via the PKCS\#11 interface with the session API.
 File system permissions are used to protect the Peer Information, asset A02.
-
 Security control C03, access to each WireGuard peer, is the public key trust system implemented by WireGuard. See section \ref{handshake_message} for more detail.
 
-====
+\subsection{use case scenario}
+To better understand the flow of data and relationships between each part of the diagram, I will describe a use case for WireGuard-HSM.
+Alice wants to connect to Bob using WireGuard. Alice logs into her laptop and inserts her security key containing her WireGuard private key. WireGuard reads the configuration file with Bobs public key, sees the HSM directive and loads pkclient. Pkclient prompts Alice to enter her PIN and create an authenticated session with the security key using the PKCS\#11 interface. WireGuard-HSM sends Bob's public key to pkclient as input to the DeriveKey() function on the security key. This function derives a shared key with Alice's private key.
+
+Once WireGuard-HSM receives the derived key from pkclient, it constructs the WireGuard handshake initiation message and sends it to Bob. Bob authenticates the handshake partially on Alice's message
 
 \section{Threat Actor 1}
 Let us consider our primary threat, TA01: a piece of malware that has gained access to Alice's computer by some means. A plausible infection scenario might be that the malware has been delivered to Alice's machine via a compromised website advertisement which is exploiting a new web-browser vulnerability in order to escape the web-browser protections and read files on the local machine.  This malware has been programmed to look for and harvest assets on infected hosts. In our case it will look for common filenames or patterns within files, that look like WireGuard configuration files.  
 
 \subsection{insufficient permissions}
-If TA01 gains read-only access a single time to Alice's computer and the file system permissions were not correctly set on the WireGuard configuration file, then the threat gains access to the A02: Peer Information.
+If TA01 gains read-only access a single time to Alice's computer and the file system permissions were not correctly set on the WireGuard configuration file, then the threat gains access to the A02: Peer Information but not A01: Alice's Private key.
 
 \subsection{sufficient permissions}
-If C01: File system permissions, is configured properly, then TA01 will have a difficult time gaining access to A02. This offers a single layer of security so TA01 will need to perform a pivot in order to bypass the file system permissions. Performing a pivot and gaining access to A02 at this point is less lucrative because A01: Alice's private key is still not accessible to the attacker.
+If C01: File system permissions, is configured properly, then TA01 will have a difficult time gaining access to A02. This offers a single layer of security, so TA01 will need to perform a pivot in order to bypass the file system permissions. Performing a pivot and gaining access to A02 at this point is less lucrative because A01: Alice's private key is still not accessible to the attacker on this system.
 
 \subsection{full compromised host}
-Let's assume that Alice's computer has been fully compromised by TA01. The malware it has gained persistent, privileged access to Alice's machine. The malware could wait until Alice connects her security key and authenticates to Bob. It would need to piggy-back on her legitimate connection but it would also be limited by Alice's actions.
+Let's assume that Alice's computer has been fully compromised by TA01. The malware it has gained persistent, privileged access to Alice's machine. In this scenario, the malware could wait until Alice connects her security key and enters her pin to authenticate WireGuard-HSM to the peer Bob. The malware would have to wait and opportunistically take advantage of Alice's legitimate connection attempts.
+WireGuard creates a virtual tunnel that is exposed on the local system as a pseudo-network interface, e.g a TUN interface. Protecting access to the TUN interface is up to the operating system but in this scenario, the fully-compromised host could allow
+
+
+\section{Threat Actor 2}
+Our second threat actor is a malicious user who gains direct or indirect access to Alice's computer. 
+
+In a direct method of attack, the threat actor 02 must gain physical access to Alice's computer and use a technical or non-technical exploit to read the hard-drive. A technical exploit might be a disk-encryption key recovery vulnerability, allowing TA02 access to the hard drive. This will only result in loss A02: Peer Information but A01 is held on Alice's security key which is safely kept on her person.
+
+If Alice left her security key permanently connected to her computer, then there is a risk that the threat actor could gain physical access to both Alice's laptop and her security key. However, the security key is useless, unless the threat actor also learns Alice's PIN. Brute forcing a hardware security key PIN is difficult because a PIN will become blocked after three incorrect guesses.
+
+In the in-direct method of attack, the threat actor must convince Alice through social engineering tactics, to disclose the contents of A02. This information is of limited value because Alice cannot be tricked into disclosing A01. The security key does not allow even authenticated users to export or view a private key.
+This attack could still be conceivably possible if Alice was convinced by the threat actor to give away physical possession of her security key. This is a very high bar to reach for a social engineering attack but still possible.
+
+
+\section{comparison}
+The threats to the WireGuard-HSM system are greatly reduced for Threat Actor 02. Physical access to the machine doesn't yield a successful vulnerability unless Alice leaves her security key with her computer and the attacker has learned her PIN.
 
 Alice's fully compromised system still doesn't pose a threat to A01 because by it's design, the Nitrokey Start doesn't allow exporting of private key. A user authenticated or not, cannot read the private key held in the NitroKey's key storage.
-Wireguard-HSM decouples two important assets, A01 and A02.
+Wireguard-HSM decouples two important assets, A01 and A02. A fully compromised host cannot exfiltrate Alice's private key. This system is not vulnerable to a denial of service attack since it requires an external third-party with knowledge of A01 and A02, to impersonate Alice's WireGuard handshake.
 
 
 
