@@ -60,7 +60,7 @@ This distinction is important because WireGuard uses only X25519 operations for 
 when generating the ephemeral session keys.
 
 \item[X25519]
-a key exchange algorithm that uses Curve25519 to implement Elliptic-curve Diffie–Hellman (ECDH) key exchange. This process is also known as key derivation function (KDF).
+a key exchange algorithm that uses Curve25519 to implement Elliptic-curve Diffie–Hellman (ECDH) key exchange. This process is also known as a key derivation function (KDF).
 
 \item[Ed25519] a digital signature algorithm that uses the Curve25519.
 
@@ -70,7 +70,7 @@ a key exchange algorithm that uses Curve25519 to implement Elliptic-curve Diffie
 (HSM) a dedicated, physical hardware device that safeguards digital keys and provides limited-access to the resident keys for operations such as but not limited to encryption, decryption, verification and authentication. 
 
 \item[Security Key]
-a general term for a class of devices that implement a limited subset of HSM functionality that securely store cryptographic keys and restricts access through a limited interface. These devices typically connect to a computer or smartphone via USB or NFC and are small enough to be held on a user's key-ring.
+a general term for a class of devices that implement a limited subset of HSM functionality. Security keys store cryptographic keys and restricts access through a limited interface. These devices typically connect to a computer or smartphone via USB or NFC and are small enough to be held on a user's key-ring.
 Nitrokey Start\cite{noauthor_nitrokey_nodate} or YubiKey\cite{noauthor_discover_nodate}\cite{noauthor_u2f_nodate-1} are examples of such devices.
 
 
@@ -79,11 +79,11 @@ Nitrokey Start\cite{noauthor_nitrokey_nodate} or YubiKey\cite{noauthor_discover_
 \textpages
 
 \chapter {Introduction}
-WireGuard is a new implementation of a Virtual Private Network (VPN) proposed in 2017. A key design feature of WireGuard is the elimination of cryptographic algorithm negotiation between parties and instead, the protocol relies on a fixed-choices for cryptographic primitives. This greatly simplifies the design, implementation and attack surface of the protocol. Another design simplification that WireGuard uses is the management of public and private keys. WireGuard does not use x509 certificates or the traditional PKI infrastructure, instead each parties identity is a 256-bit curve25519-based public key. This public key is referred to as the static public key because it doesn't expire and is the starting point from which ephemeral public keys for every session are generated. The static public keys of the initiator and responder must be pre-shared with both parties respectively, before a successful handshake can be made. 
+WireGuard is a new implementation of a Virtual Private Network (VPN) proposed in 2017. A key design feature of WireGuard is the elimination of cryptographic algorithm negotiation between parties and instead, the protocol relies on a fixed-choices for cryptographic primitives. This greatly simplifies the design, implementation and attack surface of the protocol. Another important design simplification of WireGuard, is the management of public and private keys. WireGuard does not use x509 certificates or the traditional PKI infrastructure, instead a peer's identity is tired to a 256-bit curve25519-based public key. This public key is referred to as the static public key because it doesn't expire and is the basis for building trust and deriving session keys for communication. The static public keys of the initiator and responder must be pre-shared with both parties respectively, before a successful handshake can be made. 
 
 (TODO: talk about cookie back off mechanism) and uses a novel cookie mechanism with scaling-back-off, built into every implementation, in order to resist DOS attacks. (RE-WORK SECTION LATER)
 
-A benefit to the pre-shared static public key requirement, is that any party running WireGuard is resistant to active network enumeration. In order to get a response from a peer, the initiator's message must have knowledge of the responder's public key to get a response packet. 
+A benefit to the pre-shared static public key requirement, is that any party running WireGuard is resistant to active network enumeration. In order to get a response from a peer, the initiator's message must have knowledge of the responder's public key, in order to properly form the handshake initiation packet. 
 
 WireGuard traffic is (TODO: talk about un-encrypted network traffic, it can be see but only 4 types)
 
@@ -101,28 +101,17 @@ security keys is currently almost non-existent. YubiKey is currently the most po
 lack support for X25519. I hope my project, as the first open source project to combine an X25519 supported security key with a popular open source VPN like WireGuard, will encourage more manufactures to add support for X25519 across the security key industry.
 
 \section {Related-work}
-The WireGuard handshake protocol has gone through extensive formal verification using Tamarin proof system \cite{donenfeld_formal_2018}. Researchers have identified some potential weaknesses in WireGuard around quantum computers but no critical or serious vulnerabilities have been identified sine it was introduced five years ago in 2017.
+The WireGuard handshake protocol has gone through extensive formal verification using Tamarin proof system \cite{donenfeld_formal_2018}. Researchers have identified some potential weaknesses in WireGuard around quantum computers but no critical or serious vulnerabilities have been identified since it was introduced five years ago in 2017.
 
 The WireGuard protocol and handshake has been analyzed and dissected without any major flaws being yet discovered. Researchers have demonstrated vulnerabilities might exist for guarantees like perfect-forward-secrecy, if quantum computers can be used to break XXX.  In the area of post-quantum security, a redesign of WireGuard's handshake has been proposed by \cite{hulsing_post-quantum_2021}.
 (TODO: ADD IN MORE BG INFORMATION FROM ONE-DRIVE PAPERS AND ADD A BETTER SUMMARY)
 
 \section {WireGuard Handshake}
-\ It will be necessary to understand the context that the private key is used in and how the WireGuard handshake authenticates clients, when we discuss our threat model in section~\ref{section:tm}. Next I will discuss some of the features of Curve25519 and it's place in WireGuard.
+My project is focused on improving WireGuard's handling of the private keys 
+It will be necessary to understand the context that the private key is used in and how the WireGuard handshake authenticates clients, when we discuss our threat model in section~\ref{section:tm}. Next I will discuss some of the features of Curve25519 and it's place in WireGuard.
 
 \subsection{Curve25519 public/private key pairs}
 One useful feature of Curve25519 is that any 32-byte value is a valid private key and unlike some other elliptic curves, Curve25519 keys require no key validation. (FIX THIS)This helps avoid small subgroup attacks. Curve25519 keys have also been shown to be immune to some classes of timing attacks\cite{noauthor_safecurves_2022}\cite{sasdrich_implementing_2015}.  Deriving the public key from the private key is fast enough that programs such as WireGuard don't need to store the client's public key in in the configuration file and stores only the private key. When WireGuard starts, it reads it reads the saved private key and derives the public key. 
-
-
-
-// encrypt static key
-	ss := handshake.localEphemeral.sharedSecret(handshake.remoteStatic)
-	Using the local Ephemeral private key and the peer's static public key, derive a shared key.
-	Create a 256-bit encryption key for chacha20poly1350.
-    This key is created by the KDF2 algorithm with the derived key ss as input and the initial chainkey value value (a predetermined, static value but irrelevant for our discussion)
-
-	aead, _ := chacha20poly1305.New(key[:])
-	aead.Seal(msg.Static[:0], ZeroNonce[:], device.staticIdentity.publicKey[:], handshake.hash[:])
-	handshake.mixHash(msg.Static[:])
 
 
 \section {Identity and handshake initiation}
@@ -381,16 +370,43 @@ There are two main threats to this privacy.  malware infecting a computer runnin
 
 
 
-\section{software metrics}
+\section{performance metrics}
 
 \subsection{performance}
-WireGuard-HSM makes use of a USB connected security key. The cryptographic function to derive a shared key is now locked behind a small embedded device that is much less powerful than the computer running it. I wanted to see what performance impacts my design might introduce to the system.
+WireGuard-HSM's use of a USB-connected security key means a small part of it's functionality is embedded inside a much less powerful computer than the on running the primary program. I wanted to see what performance impacts this design might introduce to the system. I wanted to also answer the question, would WireGuard-HSM have a user-noticeable impact on performance?
 
-In order to benchmark the performance of the implementations, I added a timing function that saves the current time at the beginning of the sharedSecret() function in WireGuard and DeriveNoise() in pkclient. The print statement that indicates how long the call took is deferred, meaning  once the surrounding function returns, the deferred function executes. 
-The sharedSecret() function is responsible for taking a public key as input and deriving a shared secret key. The sharedSecret() is a function of a private-key object.
+In order to benchmark the performance of the implementations, I added a timing function that saves the current time at the beginning of the sharedSecret() function in WireGuard and DeriveNoise() in pkclient. WireGuard-HSM will still make use of sharedSecret() for ephemeral key operations.
+See section \ref{keyflow} for more details on when sharedSecret() is called vs DeriveNoise().
 
-WireGuard-HSM will still make use of sharedSecret() but only after generating the ephemeral session keys. 
+The benchmarks were run on two computers connected via a local Gigabit Ethernet connection. 
+WireGuard-HSM ran on a desktop PC running Ubuntu 21.10 configured with an AMD Ryzen 5 2600 CPU @ 3.4GHz nominal speed and 64 GB DDR4 ram. 
 
+The peer computer ran an unmodified WireGuard client included with Ubuntu 21.10 on a machine with an Intel core i5-4590 CPU @ 3.30GHz nominal speed and 16 GB DDR3 ram.  
+
+Each function test was run until 32 function calls had been recorded for the target function, labeled DeriveNoise() for the security key and DeriveSoftware() for the default WireGuard software derive function.
+Each test was run 3 times and the results were compiled together for an total of 96 data points for each function. A descriptive statistic analysis performed on the resulting data set.
+
+\begin{figure}
+\centering
+\begin{minipage}{.5\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{paper/images/deriveFunctiongraph.png}
+  \caption{execution time for DeriveNoise() and softwareDerive()}
+  \label{fig:funcTimeGraph}
+\end{minipage}%
+\begin{minipage}{.5\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{paper/images/DeriveNoise freq.png}
+  \caption{histogram of DeriveNoise execution time in milliseconds}
+  \label{fig:hsmTimeGraph}
+\end{minipage}
+\end{figure}
+
+The mean execution time for DeriveHSM() is 74.9 milliseconds and the standard deviation is 0.3 milliseconds. The variance across all data points is .11 milliseconds. 
+
+The mean execution time for SoftwareDerive() is 0.17 milliseconds and the standard deviation is 0.02 milliseconds. The variance across all data points was too small to be significant.
+
+WireGuard-HSM will use the slower DeriveNoise() when sending a new handshake message or processing a re-key request from a peer. Due to WireGuard's handshake protocol, this will usually happen every 2 minutes. Looking at the performance numbers I can conclude this will add approximately 74 milliseconds of extra processing time each time this function executes. The performance penalty is less than a tenth of a second, so from a human user's perspective, this is almost unnoticeable. 
 
 \chapter {Discussion of Results}
 \section {Introduction}
