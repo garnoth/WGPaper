@@ -89,28 +89,9 @@ One useful feature of Curve25519 is that any 32-byte value is a valid private ke
 
 This public key is referred to as the long-term static public key because it doesn't expire. WireGuard also creates ephemeral, short-lived Curve25519 key pairs which are independent of the long-term static public key.
 
-\section {Contributions}
-The Elliptic Curve, Curve25519 is being used in an increasing number of open-source and commercial products\cite{noauthor_things_nodate-1} from SSH to Signal, however hardware support in 
-security keys is currently almost non-existent. YubiKey is currently the most popular security key manufacturer however all of their current products 
-lack support for X25519. I hope my project, as the first open source project to combine an X25519 supported security key with a popular open source VPN like WireGuard, will encourage more manufactures to add support for X25519 across the security key industry.
+\subsection {Identity and Handshake Initiation}
 
-\section {Related-work}
-The WireGuard handshake protocol has gone through extensive formal verification using Tamarin proof system \cite{donenfeld_formal_2018}. Researchers have identified some potential weaknesses in WireGuard around quantum computers but no critical or serious vulnerabilities have been identified since it was introduced five years ago in 2017.
-
-The WireGuard protocol and handshake has been analyzed and dissected without any major flaws discovered. Researchers have demonstrated vulnerabilities might exist for guarantees like perfect-forward-secrecy, if quantum computers can be used to break XXX.  In the area of post-quantum security, a redesign of WireGuard's handshake has been proposed by \cite{hulsing_post-quantum_2021}.
-(TODO: ADD IN MORE BG INFORMATION FROM ONE-DRIVE PAPERS AND ADD A BETTER SUMMARY)
-
-\section {Project scope}
-
-My project is focused on improving WireGuard's handling of its private key.
-It will be necessary to understand importance of the private key and how it's used during the WireGuard handshake process, when we discuss our threat model in section \ref{wg-ref-analysis}. Next I will discuss some of the features of Curve25519 and its place in WireGuard.
-
-
-
-
-\section {Identity and Handshake Initiation}
-
-A WireGuard handshake is described as 1.5RTT, meaning
+A WireGuard handshake has been described as a 1.5 round-trip-time (RTT) handshake over UDP which is inherently connection-less. The 1.5 RTT handshake is defined by the following steps: the initiator sends a handshake initiation message, the peer responds to a properly authenticated initiation message with a handshake response message and finally the initiator sends the first data packet. These three message are required for the session to be properly established and this process is referred to as 1.5RTT.
 
 \begin{figure}[ht]
 \includegraphics[width=6cm]{paper/images/handshake_process.drawio.png}
@@ -137,9 +118,29 @@ A MAC is used to protect the initiation message, with the MAC key being the resp
 
 responder, an initiator is identified by their ability to decrypt messages encrypted with the client's public key, and cannot be revoked, except by manually notifying and removing the client’s public key from all servers. As mentioned previously, in WireGuard, key management is intentionally left up to the users and administrators. There is no certificate revocation mechanism or expiration of client and server keys.
 
-TODO: timestamp description
-
 MAC2 is an optional MAC and is used only when the anti-DDoS mechanism is enabled for a given responder. 
+
+
+\section {Contributions}
+The Elliptic Curve, Curve25519 is being used in an increasing number of open-source and commercial products\cite{noauthor_things_nodate-1} from SSH to Signal, however hardware support in 
+security keys is currently almost non-existent. YubiKey is currently the most popular security key manufacturer however all of their current products 
+lack support for X25519. I hope my project, as the first open source project to combine an X25519 supported security key with a popular open source VPN like WireGuard, will encourage more manufactures to add support for X25519 across the security key industry.
+
+\section {Related-work}
+The WireGuard handshake protocol has gone through extensive formal verification using Tamarin proof system \cite{donenfeld_formal_2018}. Researchers have identified some potential weaknesses in WireGuard around quantum computers but no critical or serious vulnerabilities have been identified since it was introduced five years ago in 2017.
+
+The WireGuard protocol and handshake has been analyzed and dissected without any major flaws discovered. Researchers have demonstrated vulnerabilities might exist for guarantees like perfect-forward-secrecy, if quantum computers can be used to break XXX.  In the area of post-quantum security, a redesign of WireGuard's handshake has been proposed by \cite{hulsing_post-quantum_2021}.
+(TODO: ADD IN MORE BG INFORMATION FROM ONE-DRIVE PAPERS AND ADD A BETTER SUMMARY)
+
+\section {Project scope}
+
+My project is focused on improving WireGuard's handling of its private key.
+It will be necessary to understand importance of the private key and how it's used during the WireGuard handshake process, when we discuss our threat model in section \ref{wg-ref-analysis}. Next I will discuss some of the features of Curve25519 and its place in WireGuard.
+
+
+
+
+
 
 \section{Compatibility}
 Compatibility is an important area of consideration when modifying WireGuard. Since WireGuard has no negotiation of cryptographic primitives, any project that modifies the underlying cryptographic functions or protocol, will introduce client incompatibility and be restricted to working with only themselves. I designed WireGuard-HSM with this in mind. My goal was to improve the security of the current protocol while not introducing any client-incompatibility. This is later verified by the ability of WireGuard-HSM to perform a successful handshake and pass traffic with an unmodified WireGuard peer.
@@ -415,6 +416,14 @@ with mobile operating systems but due to technical requirements of the WireGuard
 to their smartphone for the duration of the WireGuard session. This could be accomplished by duct-taping the NFC device to the phone or leaving a USB device inserted into the phone's USB port. All of these scenarios seems like an operating hazard for the device and so aren't recommended. This always-connected requirement exists because the WireGuard protocol performs a re-key operation between peers at a default 120 seconds 
 or after 2\textsuperscript{60} messages are exchanged. This could be avoided by having users modify their WireGuard client and peer defaults to a much longer timeout for re-key, but this seems like a burdensome approach and it may not be possible for the client to request a modification to the default peer settings.
 
+\section {Portability}
+
+The WireGuard reference implementation doesn't support encrypting a user's private key at rest. A consequence of WireGuard's design choice to not support traditional digital certificates, a user cannot configure their private key to require a password for use. This forces the user to either generate and share a unique private key for each machine they wish to connect to another WireGuard peer, or manage copying and securely transporting their plain-text private key with them, copying that private key into each machines WireGuard configuration file manually. This process is left up to the user
+
+In contrast, a major benefit of WireGuard-HSM's design is that the user's identify becomes physically portable because the private key is securly stored on a USB security key. When using WireGuard-HSM a user is able to securely bring their identify with them and use it on other machines running WireGuard-HSM. 
+
+In contrast, This is a standard feature of most x509
+
 \chapter {Conclusion}
 
 \section {Future Work}
@@ -431,6 +440,43 @@ WireGuard-HSM is written using the Go language version of WireGuard but a kernel
 
 \subsection{Bio-metric Authentication}
 It would be desirable for this project to use a bio-metric security key for example, a security key that uses a small fingerprint reader to authenticate the user. A bio-metric security key with X25519 support is not yet offered together but they exist in independent implementations, for example Yubico sells a security key that has fingerprint reader needed for user authentication\cite{yubico_yubikey_2022}. 
+
+
+\section {Time Table}
+\begin{center}
+\begin{tabular}{ |c|l| }
+ \hline
+Week & Task \\
+ \hline
+June 12th & Integrate feedback on paper - 
+Rework background section, write conclusion \\ 
+  \hline
+June 19th & Rework threat model summary - Ask committee for defense dates. 
+Formal analysis work if possible \\ 
+  \hline
+June 26th & Work on paper sections with outside reviewer / create presentation. \
+If committee can't all meet this quarter for my defense, drop class and work by myself this summer   \\  
+ \hline
+July 3rd & Meet with prof Lagasse and get feedback on paper and presentation skeleton \\  
+ \hline
+July 10th & integrate feedback on paper - presentation work continued \\  
+ \hline
+July 17th & Paper work continued - mock presentation run \\  
+ \hline
+July 24th & Meet with professor Lagesse and discuss state of paper and project.
+Formal analysis work cont  \\  
+ \hline
+July 31st & Defend paper during this week  \\  
+ \hline
+August 7th & integrate paper feedback from defense  \\  
+ \hline
+August 14th & integrate paper feedback from defense and submit final paper  \\  
+ \hline
+
+ 
+\end{tabular}
+\end{center}
+
 
 \bibliographystyle{plain}
 \bibliography{references}
