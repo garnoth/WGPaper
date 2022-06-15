@@ -84,6 +84,10 @@ These design choices are not without their downsides. The lack of negotiation me
 
 \section {Background}
 
+\subsection{Curve25519 keys}
+One useful feature of Curve25519 is that any 32-byte value is a valid private key. Meaning no Curve25519 key requires validation which helps avoid small subgroup attacks. Curve25519 keys have also been shown to be immune to some classes of timing attacks\cite{noauthor_safecurves_2022}\cite{sasdrich_implementing_2015}.  Deriving the public key from the private key is fast enough that programs such as WireGuard don't need to store the client's public key in their configuration file. WireGuard only saves the private key and simply derives the public key on program start-up. Curve25519 is also not covered by any known patents and the reference implementation is in the public domain.
+
+This public key is referred to as the long-term static public key because it doesn't expire. WireGuard also creates ephemeral, short-lived Curve25519 key pairs which are independent of the long-term static public key.
 
 \section {Contributions}
 The Elliptic Curve, Curve25519 is being used in an increasing number of open-source and commercial products\cite{noauthor_things_nodate-1} from SSH to Signal, however hardware support in 
@@ -101,10 +105,7 @@ The WireGuard protocol and handshake has been analyzed and dissected without any
 My project is focused on improving WireGuard's handling of its private key.
 It will be necessary to understand importance of the private key and how it's used during the WireGuard handshake process, when we discuss our threat model in section \ref{wg-ref-analysis}. Next I will discuss some of the features of Curve25519 and its place in WireGuard.
 
-\subsection{Curve25519 keys}
-One useful feature of Curve25519 is that any 32-byte value is a valid private key. Meaning no Curve25519 key requires validation which helps avoid small subgroup attacks. Curve25519 keys have also been shown to be immune to some classes of timing attacks\cite{noauthor_safecurves_2022}\cite{sasdrich_implementing_2015}.  Deriving the public key from the private key is fast enough that programs such as WireGuard don't need to store the client's public key in their configuration file. WireGuard only saves the private key  simply derives the public key on start-up. Curve25519 is also not covered by any known patents and the reference implementation is in the public domain.
 
-This public key is referred to as the long-term static public key because it doesn't expire. WireGuard also creates ephemeral, short-lived Curve25519 key pairs which are independent of the long-term static public key.
 
 
 \section {Identity and Handshake Initiation}
