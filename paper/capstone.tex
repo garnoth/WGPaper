@@ -45,14 +45,21 @@ WireGuard is a popular, secure, and relatively new VPN implementation that has s
 a VPN technology created in 2017 by Jason DonenFeld that operates at the network layer. It aims to be a replacement for popular TLS-based VPNs like OpenVPN and IPsec. WireGuard uses a fixed-set of cryptographic primitives and by design, has no support for negotiation of these primitives. 
 
 \item[Curve25519]
-an elliptic curve with a 256-bit key size. Designed by Daniel J. Bernstein in 2005\cite{noauthor_curve25519_nodate}. Curve25519 has a digital signature algorithm named Ed25519 and a key derivation algorithm named X25519.
+an elliptic curve with a 256-bit key size. Designed by Daniel J. Bernstein in 2005\cite{noauthor_curve25519_nodate}. 
+Curve25519 has a digital signature algorithm named Ed25519 and a key derivation algorithm named X25519.
 
 \item[X25519]
 a key exchange algorithm that uses Curve25519 to implement Elliptic-curve Diffie–Hellman (ECDH) key exchange. This process is also known as a key derivation function (KDF).
 
 \item[Ed25519] a digital signature algorithm that uses the Curve25519.
 
-\item[PKCS\#11] a public-key cryptography standard governed by the OASIS technical committee\cite{noauthor_cryptsoft_nodate} that defines a common interface for programs that need to interact with security keys, also referred to as cryptographic tokens.
+\item[AEAD]
+Authenticated encryption with additional data. A class of encryption algorithms which enforce confidentiality and authenticity of data. 
+
+\item[ChaCha20Poly1350]
+an AEAD encryption algorithm which is composed of the ChaCha20 stream cipher and Poly1305 for message authentication code (MAC)
+
+\item[PKCS\#11] a public-key cryptography standard governed by the OASIS technical committee\cite{noauthor_cryptsoft_nodate} that defines a common interface for programs to interact with security keys, also referred to as cryptographic tokens.
 
 \item[Hardware security module]
 (HSM) a dedicated, physical hardware device that safeguards digital keys and provides limited-access to the resident keys for operations such as but not limited to encryption, decryption, verification and authentication. 
@@ -61,7 +68,6 @@ a key exchange algorithm that uses Curve25519 to implement Elliptic-curve Diffie
 a general term for a class of devices that implement a limited subset of HSM functionality. Security keys store cryptographic keys and restricts access through a limited interface. These devices typically connect to a computer or smartphone via USB or NFC and are small enough to be held on a user's key-ring.
 Nitrokey Start\cite{noauthor_nitrokey_nodate} or YubiKey\cite{noauthor_discover_nodate}\cite{noauthor_u2f_nodate-1} are examples of such devices.
 
-
 \end{glossary}
 
 \textpages
@@ -69,33 +75,32 @@ Nitrokey Start\cite{noauthor_nitrokey_nodate} or YubiKey\cite{noauthor_discover_
 \chapter {Introduction}
 WireGuard is a new implementation of a Virtual Private Network (VPN) proposed in 2017. It has had a successful mainstream adoption, as evidenced by its recent inclusion in many open-source operating systems\cite{donenfeld_wireguard_nodate} as well as a recent native Windows kernel module\cite{noauthor_wireguard-nt_nodate}. MacOS, iOS, Android, FreeBSD and OpenBSD are supported as well.
 WireGuard has been described as “crypto-opinionated”, meaning the WireGuard protocol supports only one cryptographic primitive for each cryptographic requirement.
-For example, WireGuard only supports ChaCha20Poly1350 (TODO add to glossary) for symmetric 
+For example, WireGuard only supports ChaCha20Poly1350 for symmetric 
 encryption\cite{donenfeld_wireguard_2017} of data and Curve25519 key pairs for client authentication and key exchange.
-The lack of protocol negotiation greatly simplifies the design, implementation complexity and attack surface of the protocol(TODO cite downgrade attacks). Another important design simplification of WireGuard, is the management of public and private keys. WireGuard does not use x509 certificates or the traditional PKI infrastructure. A peer's identity is anchored to a Curve25519-based public key. 
+The lack of protocol negotiation greatly simplifies the design, implementation complexity and attack surface of the protocol(TODO cite downgrade attacks). Another important design simplification of WireGuard, is the management of public and private keys. WireGuard does not use x509 certificates or the traditional PKI infrastructure. A peer's identity is anchored to a raw Curve25519-based public key. 
 The static public keys of the initiator and responder must be pre-shared with both parties respectively, before a successful handshake can be made. 
 
-(TODO: talk about cookie back off mechanism) and uses a novel cookie mechanism with scaling-back-off, built into every implementation, in order to resist DOS attacks. (RE-WORK SECTION LATER)
+(TODO: talk about cookie back off mechanism) and uses a novel cookie mechanism with scaling-back-off, built into every implementation, in order to resist DOS attacks. (TODO MAYBE RE-WORK SECTION LATER)
 
 A benefit to the pre-shared static public key requirement, is that any party running WireGuard is resistant to active network enumeration. In order to get a response from a peer, the initiator's message must have knowledge of the responder's public key, in order to properly form the handshake initiation packet. 
 
-These design choices are not without their downsides. The lack of negotiation means that if vulnerabilities are identified and a cryptographic component must be changed, this will result in peer incompatibility, until all peers are updated to the new protocol.
-
+These design choices are not without their clear downsides. The lack of cryptographic negotiation means that if vulnerabilities are identified and a cryptographic component must be changed, this will result in peer incompatibility, until all peers are updated to the new protocol.
 
 
 \section {Background}
 
 \subsection{Curve25519 keys}
-One useful feature of Curve25519 is that any 32-byte value is a valid private key. Meaning no Curve25519 key requires validation which helps avoid small subgroup attacks. Curve25519 keys have also been shown to be immune to some classes of timing attacks\cite{noauthor_safecurves_2022}\cite{sasdrich_implementing_2015}.  Deriving the public key from the private key is fast enough that programs such as WireGuard don't need to store the client's public key in their configuration file. WireGuard only saves the private key and simply derives the public key on program start-up. Curve25519 is also not covered by any known patents and the reference implementation is in the public domain.
+A useful feature of Curve25519 is that any 32-byte value is a valid private key. Meaning no Curve25519 key requires validation which helps avoid small subgroup attacks. Curve25519 keys have also been shown to be immune to some classes of timing attacks\cite{noauthor_safecurves_2022}\cite{sasdrich_implementing_2015}.  Deriving the public key from the private key is fast enough that programs such as WireGuard don't need to store the client's public key in their configuration file. WireGuard only saves the private key and simply derives the public key on program start-up. Curve25519 is also not covered by any known patents and the reference implementation is in the public domain.
 
-This public key is referred to as the long-term static public key because it doesn't expire. WireGuard also creates ephemeral, short-lived Curve25519 key pairs which are independent of the long-term static public key.
+This public key is referred to as the 'long-term static public key' because it doesn't expire. WireGuard also creates ephemeral, short-lived Curve25519 key pairs which are independent of the long-term static public key. These short-lived key pairs are called 
 
 \subsection {Identity and Handshake Initiation}
 
-A WireGuard handshake has been described as a 1.5 round-trip-time (RTT) handshake over UDP which is inherently connection-less. The 1.5 RTT handshake is defined by the following steps: the initiator sends a handshake initiation message, the peer responds to a properly authenticated initiation message with a handshake response message and finally the initiator sends the first data packet. These three message are required for the session to be properly established and this process is referred to as 1.5RTT.
+A WireGuard handshake has been described as a 1.5 round-trip-time (RTT) handshake over UDP which is inherently connection-less. The 1.5 RTT handshake is defined by the following steps: the initiator sends a handshake initiation message, the peer responds to a properly authenticated initiation message with a handshake response message. Finally the initiator sends the first data packet. These three message are required for the session to be properly established and compose the 1.5RTT handshake process.
 
 \begin{figure}[ht]
 \includegraphics[width=6cm]{paper/images/handshake_process.drawio.png}
-\caption{Informal handshake narration process}
+\caption{Informal Handshake Narration Process}
 \label{fig:handshake_process}
 \end{figure}
 
@@ -207,13 +212,13 @@ TODO talk about realizing the need to modify the configuration tool
 WireGuard configuration on the command-line is handled via a separate program called wireguard-tools \cite{noauthor_wireguard-tools_2022}. This program handles parsing a plain-text configuration file and turns the configuration directives into API calls to the separately running WireGuard daemon, which configures the virtual-interface. I wanted my program to conform as closely as possible to the WireGuard reference implementation, so I made modifications to the wireguard-tools program. I added support for an 'HSM' line in the plain-text configuration file. 
 \begin{figure}[ht]
 \includegraphics[width=8cm]{paper/images/wg_conf_std.png}
-\caption{example WireGuard configuration file from the reference implementation}
+\caption{Example WireGuard Configuration File from the Reference Implementation}
 \label{fig:wg_config}
 \end{figure}
 
 \begin{figure}[ht]
 \includegraphics[width=8cm]{paper/images/wg_conf_hsm.png}
-\caption{Example WireGuard-HSM configuration file}
+\caption{Example WireGuard-HSM Configuration File}
 \label{fig:hsm_config}
 \end{figure}
 This modification removes the requirement for defining and storing the private-key in the plain-text file. The HSM directive tells the program two, and optionally three things. First it lists the PKCS\#11 library path. Second, the slot id  to use on the security key. Thirdly and optionally, the pin required to access the slot.
@@ -242,7 +247,7 @@ Here I present my analysis of the reference implementation of WireGuard. This th
 
 \begin{figure}[ht]
 \includegraphics[width=14cm]{paper/images/WG_DFD.drawio.png}
-\caption{A threat model for the WireGuard reference implementation - data flow diagram}
+\caption{Threat Model for the WireGuard Reference Implementation - Data Flow Diagram}
 \label{fig:wg_ref_dfd}
 \end{figure}
 
@@ -306,7 +311,7 @@ Threat model analysis of the WireGuard-HSM. This threat model is also focused on
 
 \begin{figure}[ht]
 \includegraphics[width=14cm]{paper/images/WGHSM__NoPin_DFD.drawio}
-\caption{A threat model for WireGuard-HSM - data flow diagram}
+\caption{A Threat Model for WireGuard-HSM - Data Flow Diagram}
 \label{fig:wg_hsm_dfd}
 \end{figure}
 
@@ -386,13 +391,13 @@ Each test was run 3 times and the results were compiled together for an total of
 \begin{minipage}{.5\textwidth}
   \centering
   \includegraphics[width=1\linewidth]{paper/images/deriveFunctiongraph.png}
-  \caption{Execution time for DeriveNoise() and softwareDerive()}
+  \caption{Execution Time for DeriveNoise() and softwareDerive()}
   \label{fig:funcTimeGraph}
 \end{minipage}%
 \begin{minipage}{.5\textwidth}
   \centering
   \includegraphics[width=1\linewidth]{paper/images/DeriveNoise freq.png}
-  \caption{Histogram of DeriveNoise execution time in milliseconds}
+  \caption{Histogram of DeriveNoise Execution Time in Milliseconds}
   \label{fig:hsmTimeGraph}
 \end{minipage}
 \end{figure}
