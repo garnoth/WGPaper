@@ -62,7 +62,7 @@ an AEAD encryption algorithm which is composed of the ChaCha20 stream cipher and
 \item[PKCS\#11] a public-key cryptography standard governed by the OASIS technical committee\cite{noauthor_cryptsoft_nodate} that defines a common interface for programs to interact with security keys, also referred to as cryptographic tokens.
 
 \item[Hardware security module]
-(HSM) a dedicated, physical hardware device that safeguards digital keys and provides limited-access to the resident keys for operations such as but not limited to encryption, decryption, verification and authentication. 
+(HSM) a dedicated, physical hardware device that safeguards digital keys and provides limited-access to the resident keys for operations on messages such as encryption, decryption, verification and authentication. 
 
 \item[Security Key]
 a general term for a class of devices that implement a limited subset of HSM functionality. Security keys store cryptographic keys and restricts access through a limited interface. These devices typically connect to a computer or smartphone via USB or NFC and are small enough to be held on a user's key-ring.
@@ -73,26 +73,40 @@ Nitrokey Start\cite{noauthor_nitrokey_nodate} or YubiKey\cite{noauthor_discover_
 \textpages
 
 \chapter {Introduction}
+
 WireGuard is a new implementation of a Virtual Private Network (VPN) proposed in 2017. It has had a successful mainstream adoption, as evidenced by its recent inclusion in many open-source operating systems\cite{donenfeld_wireguard_nodate} as well as a recent native Windows kernel module\cite{noauthor_wireguard-nt_nodate}. MacOS, iOS, Android, FreeBSD and OpenBSD are supported as well.
 WireGuard has been described as “crypto-opinionated”, meaning the WireGuard protocol supports only one cryptographic primitive for each cryptographic requirement.
-For example, WireGuard only supports ChaCha20Poly1350 for symmetric 
-encryption\cite{donenfeld_wireguard_2017} of data and Curve25519 key pairs for client authentication and key exchange.
-The lack of protocol negotiation greatly simplifies the design, implementation complexity and attack surface of the protocol(TODO cite downgrade attacks). Another important design simplification of WireGuard, is the management of public and private keys. WireGuard does not use x509 certificates or the traditional PKI infrastructure. A peer's identity is anchored to a raw Curve25519-based public key. 
+For example, WireGuard only supports Curve25519 key pairs for client authentication and key exchange and ChaCha20Poly1350 for symmetric 
+encryption\cite{donenfeld_wireguard_2017} of data.
+The lack of protocol negotiation greatly simplifies the design, implementation complexity and attack surface of the protocol. 
+WireGuard runs over the connection-less protocol UDP with several mechanisms to effectively manage connection-state and resist enumeration by network scanners.
+
+Another important design simplification of WireGuard, is the management of public and private keys. WireGuard does not use traditional x509 digital certificates or public key infrastructure. A peer's identity is anchored to a static Curve25519-based public key stored in the configuration file.
 The static public keys of the initiator and responder must be pre-shared with both parties respectively, before a successful handshake can be made. 
 
-(TODO: talk about cookie back off mechanism) and uses a novel cookie mechanism with scaling-back-off, built into every implementation, in order to resist DOS attacks. (TODO MAYBE RE-WORK SECTION LATER)
+A strength of the pre-shared static public key requirement, is that any party running WireGuard is resistant to active network enumeration. In order to elicit a response from a node running WireGuard, the initiator's message must have knowledge of the responder's public key, in order to properly form the handshake initiation packet. {TODO MOVE THIS handshake}
 
-A benefit to the pre-shared static public key requirement, is that any party running WireGuard is resistant to active network enumeration. In order to get a response from a peer, the initiator's message must have knowledge of the responder's public key, in order to properly form the handshake initiation packet. 
+These design choices are not without their clear downsides. The lack of cryptographic negotiation means that if vulnerabilities are identified and a cryptographic component must be modified or replaced, this will result in complete peer incompatibility, until all peers are updated to the new protocol.
 
-These design choices are not without their clear downsides. The lack of cryptographic negotiation means that if vulnerabilities are identified and a cryptographic component must be changed, this will result in peer incompatibility, until all peers are updated to the new protocol.
+WireGuard has been shown to be very fast, out-performing IPsec and OpenVPN-based VPNs, in terms of throughput and response time\cite{donenfeld_performance_2018}, as well as easy to quickly port to a wide variety of operating systems. 
+
+\subsection{Problem Definition}
+Since it's introduction in 2017, the WireGuard protocol has been shown to secure in many scenarios. However, after examining the reference implementation, the management and storage of private keys was shown to be an area for improvement.
+
+\subsection{Goals}
+In this project, my primary goal is to increase the security of WireGuard by improving it's key handling. I want to use well established methods in the computer security field to achieve this goal. Instead of proposing compatibility-breaking changes, my secondary goal was to work within the confines of the existing protocol and maintain client compatibility, while improving security.
+
+\subsection{Outline}
+What I did was evaluate various methods secure the static private key's of the user without compromising client compatibility. After arriving at a choice 
 
 
 \section {Background}
+WireGuard makes exclusive use of Curve25519 for user authentication and authorization. I will discuss it's technical use in WireGuard as well as how it is used for user identity.
 
 \subsection{Curve25519 keys}
 A useful feature of Curve25519 is that any 32-byte value is a valid private key. Meaning no Curve25519 key requires validation which helps avoid small subgroup attacks. Curve25519 keys have also been shown to be immune to some classes of timing attacks\cite{noauthor_safecurves_2022}\cite{sasdrich_implementing_2015}.  Deriving the public key from the private key is fast enough that programs such as WireGuard don't need to store the client's public key in their configuration file. WireGuard only saves the private key and simply derives the public key on program start-up. Curve25519 is also not covered by any known patents and the reference implementation is in the public domain.
 
-This public key is referred to as the 'long-term static public key' because it doesn't expire. WireGuard also creates ephemeral, short-lived Curve25519 key pairs which are independent of the long-term static public key. These short-lived key pairs are called 
+This public key is referred to as the 'long-term static public key' because it doesn't expire and is the cornerstone for a user's identity. WireGuard also creates ephemeral, short-lived Curve25519 key pairs which are independent of the long-term static public key. These short-lived key pairs are called 
 
 \subsection {Identity and Handshake Initiation}
 
@@ -123,15 +137,22 @@ A MAC is used to protect the initiation message, with the MAC key being the resp
 
 responder, an initiator is identified by their ability to decrypt messages encrypted with the client's public key, and cannot be revoked, except by manually notifying and removing the client’s public key from all servers. As mentioned previously, in WireGuard, key management is intentionally left up to the users and administrators. There is no certificate revocation mechanism or expiration of client and server keys.
 
-MAC2 is an optional MAC and is used only when the anti-DDoS mechanism is enabled for a given responder. 
+MAC2 is an optional message authentication code and is only used when the anti-DDoS mechanism is enabled for a given responder. While this feature is interesting from the protocol security perspective, further discussion of these features is out of scope for the project.
+
+\section {Identity Portability}
+The WireGuard reference implementation doesn't support encrypting a user's private key at rest. The lack of traditional digital certificate support also means a user cannot configure their private key to require a password for use. This forces the user to either generate and share a unique private key for each machine they wish to connect to another WireGuard peer, or manage copying and securely transporting their plain-text private key with them, copying that private key into each machines WireGuard configuration file manually. This process is left up to the user to handle. TODO --move to background
+
+As mentioned previously, WireGuard doesn't support major benefit of WireGuard-HSM's design is that the user's identify becomes physically portable because the private key is securely stored on a USB security key. When using WireGuard-HSM a user is able to securely bring their identify with them and use it on other machines running WireGuard-HSM. 
+
+In contrast, This is a standard feature of most digital certificates.
 
 
 \section {Contributions}
 The Elliptic Curve, Curve25519 is being used in an increasing number of open-source and commercial products\cite{noauthor_things_nodate-1} from SSH to Signal, however hardware support in 
 security keys is currently almost non-existent. YubiKey is currently the most popular security key manufacturer however all of their current products 
-lack support for X25519. I hope my project, as the first open source project to combine an X25519 supported security key with a popular open source VPN like WireGuard, will encourage more manufactures to add support for X25519 across the security key industry.
+lack support for X25519. One of the goals of this project, as the first open source project to combine an X25519 supported security key with a popular open source VPN like WireGuard, will encourage more manufactures to add support for X25519 across the security key industry.
 
-\section {Related-work}
+\chapter {Related-work}
 The WireGuard handshake protocol has gone through extensive formal verification using Tamarin proof system \cite{donenfeld_formal_2018}. Researchers have identified some potential weaknesses in WireGuard around quantum computers but no critical or serious vulnerabilities have been identified since it was introduced five years ago in 2017.
 
 The WireGuard protocol and handshake has been analyzed and dissected without any major flaws discovered. Researchers have demonstrated vulnerabilities might exist for guarantees like perfect-forward-secrecy, if quantum computers can be used to break XXX.  In the area of post-quantum security, a redesign of WireGuard's handshake has been proposed by \cite{hulsing_post-quantum_2021}.
@@ -143,70 +164,9 @@ My project is focused on improving WireGuard's handling of its private key.
 It will be necessary to understand importance of the private key and how it's used during the WireGuard handshake process, when we discuss our threat model in section \ref{wg-ref-analysis}. Next I will discuss some of the features of Curve25519 and its place in WireGuard.
 
 
-
-
-
-
-\section{Compatibility}
-Compatibility is an important area of consideration when modifying WireGuard. Since WireGuard has no negotiation of cryptographic primitives, any project that modifies the underlying cryptographic functions or protocol, will introduce client incompatibility and be restricted to working with only themselves. I designed WireGuard-HSM with this in mind. My goal was to improve the security of the current protocol while not introducing any client-incompatibility. This is later verified by the ability of WireGuard-HSM to perform a successful handshake and pass traffic with an unmodified WireGuard peer.
-
-\section{Security Key}
-\begin{figure}[ht]
-\includegraphics[width=4cm]{paper/images/nitrokey.jpg}
-\caption{A picture of a NitroKey Start}
-\label{nitrokey}
-\end{figure}
-
-This distinction is important because WireGuard only uses the X25519 algorithm from Curve25519. Some security keys list support for 'Curve25519' yet most only support Ed25519.
-
-I will give a brief overview of key parts of the NitroKey start. It is hardware security key that connects to a computer via a USB-A interface. It was the only security key at time of writing that supported X25519 operations.
-The security key safeguards private keys by allows authenticated users to perform a strict set of key management and cryptographic function on a slot. A slot typically holds private and public keys. The slot is protected by a user PIN. The whole security key itself is protected by a master pin. The master pin is used to unblock a slot, if a user enters a PIN incorrectly three times. After three incorrect guesses the slot is blocked and even the correct PIN will not work on the slot. The slot must be unblocked using the master key, or the device must be erased and reset.
-
-A security key should only be inserted into a computer when its use is required and should be held by the user, on a key chain or other means. Its separation from the computer is important for creating the best security posture. We will discuss the threats that arise when these procedures are not followed by users in section \ref{wg-hsm-analysis}
-
 \chapter {Project Background}
 
-\section {Conception}
-I was interested in WireGuard when it was announced but it wasn't until a group project I started in Winter 2020, where we looked at the security of WireGuard and primarily identified key handling as a potential weak point in the program, that I began to consider different approaches to improving WireGuard,  without introducing a larger attack surface or forking the project. 
-
-In Spring quarter of 2021, I took research methods in software development with Dr Erdly. During this course I continued to explore ideas that I had about WireGuard and its private key handling. I created my final project around WireGuard. In the project, I asked the question, how could WireGuard's private key handling be better? What systems could I create to improve it, and then how could I evaluate those systems?  
-In the final part of the project I create a mock survey of software engineers to rate four of the final designs. I used my own metrics to define my terms (TODO finsh up this back story, get to point about compatibility)
-
-I came up with three designs that would improve key handling in WireGuard and I rated them on implementation, TODO(dig up project and look at ratings)!! In the end I chose the simplest overall design with the biggest risk being that my design relied on a security key produced by a single manufacture. No other manufacturer at the time was making a security key that supported X25519.
-
-\section{Starting out}
-
-I decided to start with interfacing with the NitroKey and getting familiar with the tools and commands to interact with it. I initially chose the Nitrokey start because the product page said it supported X25519\cite{noauthor_nitrokey_nodate} which is the ECDH key derivation process. After a few frustrating days I couldn't figure out how to even generate or put a curve25519 key on the nitrokey start. Searching online, I didn't see any existing software projects that interfaced with a security key for performing X25519 operations. What I did discover after pouring over NitroKey's documentation was that they recommended using a program called OpenSC to work with the Nitrokey but that only a program called GnuPG, when running in an advanced configuration mode, was capable of telling the Nitrokey to generate a set of curve25519 keys. Confusingly, GnuPG can generate the correct keys but it has no ability to perform X25519 with the security key.
-
-\section {OpenSC}
-Key derivation for ECDH, called X25519 in my specific case when using Curve25519 keys, requires access to Bob's private key and Alice's public key. The cryptographic operation will generate a new 'shared key' that is identical for both parties when the keys are flipped and you use Alice's private key and Bob's public key. 
-After researching the OpenSC tool support forums, I was able to find the command string that instructs a  security key to perform the key derivation operation with the correct inputs and outputs. However the tool only produced an error when I tried to use it with the Nitrokey and Alice's public key. I discovered that while NitroKey support documentation says OpenSC is the best tool to use with a Nitrokey Start, OpenSC doesn't support reading curve25519 keys! Why would this key list support for X25519 then? I found out that there was a single test that was written in OpenSC which used the PKCS\#11 interface to generate and verify a shared-secret on the hardware device. This functionality wasn't exposed to users in any way and only ran as part of a test-suite for part of the program. Technically, OpenSC could be used to test that X25519 operations worked on a hardware device but with no user control over the process. This realization set the stage for the rest of the project: technically the functionality is there but no-one has a practical implementation yet. I enjoy a challenge but I was getting worried at this point about the feasibility of completing my project on time.
-
-At this point, I realized that had I created a proof-of-concept program before starting my project, it would have been helpful in gauging how much work this project would entail. It was a frustrating start to my project, I couldn't even start on modifying WireGuard to use the NitroKey if I couldn't find a way to perform X25519.
-
-Analysing the key derivation function in OpenSC and finding the spot where reading my key failed, gave me enough information to start looking into how OpenSC read keys using OpenSSL and then I researched Curve25519 support in OpenSSL. Curve25519 support was a relatively recent addition in version 1.1 of the program\cite{noauthor_support_nodate}.
-After digging through the OpenSC tool some more and reading the OpenSSL function documentation, I was able to upgrade how OpenSC read public keys during key derivation and expand its functionality to support X25519 and get the previous command working.
-Once I had OpenSC working to perform X25519 on the key, I wrote a test that would perform the operation on the security key and also perform the operation as the other party but in software-only mode, using OpenSSL. The test would verify that the derived key was the same from both steps of the test. This test confirmed that the security key's X25519 function worked correctly and I was finally making progress.
-
-At this point, I realized that all of OpenSC's interaction with the security key is handled via the PKCS\#11 interface and that interface is compiled into a library which connects to the operating system. This library abstracts parts of the lower-level system interactions, so I wouldn't need to worry about, for example, the USB interface. I spent some time looking at how other programs use PKCS\#11 libraries to implement hardware key integration to get more familiar with this area of programming.
-
-\section{Interfacing}
-At this stage I had X25519 working on the security key and I understood more about PKCS\#11 and how other programs used it. This interfacing part was the area of my proposal that I understood the least. Before I started the project, I wasn't that clear about exactly how I would 'connect' X25519 operations and WireGuard. Using my software development skills that I learned at the UW, I decided it would be best to encapsulate the functionality in a program that would act as the go-between. Handing the various states of the program, user-input and error states. I could create my own limited API for a calling program to request specific actions on the security key. This approach would also reduce the amount of work I would have to do in WireGuard itself.
-
-\section{WireGuard Implementation Choice}
-I had assumed at the beginning of the project that I should implement my program by modifying the Linux kernel module version of WireGuard. I tried for a few days to learn how to modify and build a kernel module, which has gotten a lot more complicated and time-consuming with things such as module signing and the sheer size of the Linux kernel. I had written and built a kernel module in CSS 537 but that module didn't need to interact with external libraries or handle bi-directional user interactions. After reading the WireGuard kernel module, I decided to try reading through the Go language version of WireGuard. This version is implemented as a standalone program that can run on most operating systems. This version was easier to comprehend and understand the program flow. My project is about implementing new functionality and evaluating the system, so I decided to focus my efforts into modifying the Go version of WireGuard.
-The Go programming language has good support for modules which allows programs to easily expand their functionality by importing other code modules. After some more research, I decided to create a Golang module that handled the physical security-key interface and expose a restricted set of functionality to a calling program. 
-
-\section{Pkclient}
-\label{pk_design}
-The most popular and widely-used PKCS\#11 library in Go is called "miekg/pkcs11". From the GitHub repository: "This is a Go implementation of the PKCS\#11 API. It wraps the library closely, but uses Go idiom where it makes sense. It has been tested with SoftHSM."\cite{gieben_pkcs11_2022}. 
-I was worried after reading that this program was officially, only tested with SoftHSM, a common software-only version of an HSM. Before I started in earnest, I dug through openly-available public code repositories to try and find an example where someone had used this program to perform key derivation. The only example I could find was another student's class-project where they had evaluated the Go language on aspects related to RSA and ECC key-operations, but had commented out the function on key derivation for unsaid reasons \cite{quapka_go-analysis_2019}. I was worried again starting this phase of the project because it felt very similar to the claims about Nitrokey and X25519: technically this should work but there is no real-world demonstration of the functionality. Would this library actually work with my Nitrokey?
-
-I spent two weeks learning Go language and building and interactively designing a program which I named 'pkclient', to talk to the Nitrokey Start. Pkclient handles logging into the hardware key, prompting the caller for the pin, if the pin is not saved in the configuration file (optional), finding the appropriate X25519-key on the security-key and finally, once properly initialized, pkclient can handle key derivation requests and returning the derived-key back to the caller.
-
-TODO talk about building in integration into WG.
-
-TODO talk about realizing the need to modify the configuration tool
+12)  2.1 -- Background is more about "what does the reader need to know that I don't expect somebody with a BS or MS in CS to know". Here you should be describing details about curve25519, Nitrokey, pkclient, GnuPG, etc that are relevant to why you did your work the way you did. (Conception)
 
 \section{Configuration}
 WireGuard configuration on the command-line is handled via a separate program called wireguard-tools \cite{noauthor_wireguard-tools_2022}. This program handles parsing a plain-text configuration file and turns the configuration directives into API calls to the separately running WireGuard daemon, which configures the virtual-interface. I wanted my program to conform as closely as possible to the WireGuard reference implementation, so I made modifications to the wireguard-tools program. I added support for an 'HSM' line in the plain-text configuration file. 
@@ -231,10 +191,31 @@ TODO Finish this section?
 
 
 
-\section {Methodology}
+\chapter {Methodology}
+
+this is where you describe the design of your system and justify your design choices.  Typically this chapter would also include any relevant models that you're using such as the threat model, user model, system model, etc. along with your design goals so that the reader knows exactly what problems you're trying to address and which ones are out of scope.
+
 I will perform a comparative threat model analysis of the reference implementation and WireGuard-HSM. This analysis will show the relative strengths and weaknesses of the designs and what I have improved on.
 
 I will also use some traditional software metrics to evaluate the project.
+
+
+\section{Compatibility}
+Compatibility is an important area of consideration when modifying WireGuard. Since WireGuard has no negotiation of cryptographic primitives, any project that modifies the underlying cryptographic functions or protocol, will introduce client incompatibility, leaving the modified peers only able to communiate with peers of the same type. I designed WireGuard-HSM with this in mind, to allow WireGuard-HSM peers the ability to communicate with unmodified peers.
+
+\section{Security Key}
+\begin{figure}[ht]
+\includegraphics[width=3.5cm]{paper/images/nitrokey.jpg}
+\caption{A picture of a NitroKey Start}
+\label{nitrokey}
+\end{figure}
+
+This distinction is important because WireGuard only uses the X25519 algorithm from Curve25519. Some security keys list support for 'Curve25519' yet most only support Ed25519.
+
+I will give a brief overview of key parts of the NitroKey start. It is hardware security key that connects to a computer via a USB-A interface. It was the only security key at time of writing that supported X25519 operations.
+The security key safeguards private keys by allows authenticated users to perform a strict set of key management and cryptographic function on a slot. A slot typically holds private and public keys. The slot is protected by a user PIN. The whole security key itself is protected by a master pin. The master pin is used to unblock a slot, if a user enters a PIN incorrectly three times. After three incorrect guesses the slot is blocked and even the correct PIN will not work on the slot. The slot must be unblocked using the master key, or the device must be erased and reset.
+
+A security key should only be inserted into a computer when its use is required and should be held by the user, on a key chain or other means. Its separation from the computer is important for creating the best security posture. We will discuss the threats that arise when these procedures are not followed by users in section \ref{wg-hsm-analysis}
 
 \chapter {Evaluation}
 \section{Threat models analysis}
@@ -358,7 +339,7 @@ This attack could still be conceivably possible if Alice was convinced by the th
 The threats to the WireGuard-HSM system are greatly reduced for Threat Actor 02. Physical access to the machine doesn't yield a successful vulnerability unless Alice leaves her security key with her computer and the attacker has learned her PIN.
 
 Alice's fully compromised system still doesn't pose a threat to A01 because by its design, the Nitrokey Start doesn't allow exporting of private key. A user authenticated or not, cannot read the private key held in the NitroKey's key storage.
-Wireguard-HSM decouples two important assets, A01 and A02. A fully compromised host cannot exfiltrate Alice's private key. This system is not vulnerable to a denial of service attack since it requires an external third-party with knowledge of A01 and A02, to impersonate Alice's WireGuard handshake.
+WireGuard-HSM decouples two important assets, A01 and A02. A fully compromised host cannot exfiltrate Alice's private key. This system is not vulnerable to a denial of service attack since it requires an external third-party with knowledge of A01 and A02, to impersonate Alice's WireGuard handshake.
 
 
 
@@ -404,7 +385,7 @@ Each test was run 3 times and the results were compiled together for an total of
 
 The mean execution time for DeriveHSM() is 74.9 milliseconds and the standard deviation is 0.3 milliseconds. The variance across all data points is .11 milliseconds. 
 
-The mean execution time for SoftwareDerive() is 0.17 milliseconds and the standard deviation is 0.02 milliseconds. The variance across all data points was too small to be significant.
+The mean execution time for softwareDerive() is 0.17 milliseconds and the standard deviation is 0.02 milliseconds. The variance across all data points was too small to be significant.
 
 WireGuard-HSM will use the slower DeriveNoise() when sending a new handshake message or processing a re-key request from a peer. Due to WireGuard's handshake protocol, this will usually happen every 2 minutes. Looking at the performance numbers I can conclude this will add approximately 74 milliseconds of extra processing time each time this function executes. The performance penalty is less than a tenth of a second, so from a human user's perspective, this is almost unnoticeable. 
 
@@ -416,23 +397,27 @@ I will discuss the limitations of my project as well as the technical hurdles th
 One limitation of WireGuard and WireGuard-HSM that can be understood looking at the threat model is that WireGuard operates at the network level, acting as virtual network interface, it makes no guarantees at the operating system level about who or what application is allowed access to the tunnel or not. It is understandable that to maintain platform independence, this is not a goal of the WireGuard project but researchers have proposed a modified WireGuard client that authenticates each application on a smartphone, that is given access to the WireGuard virtual tunnel interface. A major downside of this proposed modification is it requires the user to enter their pin number separately for each application that requires tunnel access, every time WireGuard is started.\cite{wu_sewg_2020}
 
 \section {Limitations}
-I had initially hoped that my project could include mobile operating systems such as a smart phone. Users can easily use security keys
-with mobile operating systems but due to technical requirements of the WireGuard protocol, a user would have to leave their security key connected
-to their smartphone for the duration of the WireGuard session. This could be accomplished by duct-taping the NFC device to the phone or leaving a USB device inserted into the phone's USB port. All of these scenarios seems like an operating hazard for the device and so aren't recommended. This always-connected requirement exists because the WireGuard protocol performs a re-key operation between peers at a default 120 seconds 
-or after 2\textsuperscript{60} messages are exchanged. This could be avoided by having users modify their WireGuard client and peer defaults to a much longer timeout for re-key, but this seems like a burdensome approach and it may not be possible for the client to request a modification to the default peer settings.
+In this section I will discuss the limitations of my project in regards to the completeness of the evaluation and the limitations of the project implementation itself. Significant time was spent to get the technical implementation of the project working, so I will discuss what improvements I would like to see, if I had more time to complete the evaluation of the entire system.
 
-\section {Portability}
+\subsection{Formal Analysis}
+If I had more time, I would include a formal analysis of the security properties of WireGuard-HSM. My goal would be to define WireGuard-HSM in the Tamarin prover to provide a symbolic model of the system. This would show how the security properties of WireGuard-HSM are maintained and provide more proof that the system is secure.
 
-The WireGuard reference implementation doesn't support encrypting a user's private key at rest. A consequence of WireGuard's design choice to not support traditional digital certificates, a user cannot configure their private key to require a password for use. This forces the user to either generate and share a unique private key for each machine they wish to connect to another WireGuard peer, or manage copying and securely transporting their plain-text private key with them, copying that private key into each machines WireGuard configuration file manually. This process is left up to the user
+\subsection{Mobile Operating Systems}
+I had initially planned to support mobile operating systems such as a smart-phones. Users can easily use security keys
+with mobile operating systems but due to technical requirements of the WireGuard protocol, a WireGuard-HSM user would have to leave their security key connected
+or after 2\textsuperscript{60} messages are exchanged. This could be avoided by having users modify their WireGuard client and peer defaults to a much longer timeout for re-key, but this seems like a burdensome approach and it may not be possible for the client to request a modification of peer settings.
 
-In contrast, a major benefit of WireGuard-HSM's design is that the user's identify becomes physically portable because the private key is securly stored on a USB security key. When using WireGuard-HSM a user is able to securely bring their identify with them and use it on other machines running WireGuard-HSM. 
 
-In contrast, This is a standard feature of most x509
+\section{Compatibility}
+WireGuard-HSM is able to perform a successful handshake and pass traffic with an unmodified WireGuard peer.
 
 \chapter {Conclusion}
+ 
+{TODO 15)  In your conclusions section, you mostly focus on future work -- what are the actual conclusions you can draw from the results of your implementation, analysis, and experiments? } 
+I have shown that WireGuard-HSM reduces the attack surface for threat actors by moving the long-term static private key into security key. WireGuard-HSM increases the portability of a user's identity while maintaining the security of the private key. This improves the ease-of-use for the user.
 
 \section {Future Work}
-There are several areas where I would like to improve WireGuard-HSM that have been identified over the course of implementing and evaluating the system. These areas include pin handling and security key availability. 
+There are several areas where I would like to improve WireGuard-HSM that have been identified over the course of implementing and evaluating the system. These areas include pin handling and security key availability and kernel-mode support.
 
 \subsection{Pin handling}
  A user may choose not a save the security-key pin in the WireGuard-HSM configuration file. In this mode, the program must prompt user for the pin. Currently this prompt is very simple and given on the command-line when the user runs WireGuard-HSM. This prompt is easy to miss and wouldn't work very well if WireGuard-HSM was implemented as a kernel module. A better approach would be to have the prompt implemented as a system-dialog window, that appears over any existing windows, making very simple for the user to omit the pin and only enter it when using WireGuard-HSM. Finding a Go-module that opens window dialogues and supports multiple operating system was deemed out of scope for this project but it will be my next addition to the program since it would increase the ease-of-use for the program. 
@@ -440,47 +425,66 @@ There are several areas where I would like to improve WireGuard-HSM that have be
 \subsection{Security Key Diversity}
 Hardware security-key support for curve25519 and specifically X25519 is, as of writing, very limited. Nitrokey 3 is planned to support X25519 but the hardware is still not in mass production. I would like to see bio-metric hardware-keys with X25519 support, this would add an additional layer of security to our model as it further authenticates the user. As of writing, I could find no planned development for such a key. Many hardware-security keys have introduced support for near-field-communication (NFC) which makes using them with mobile devices almost seamless. Having a security-key with Curve25519 support, would make integrating WireGuard-HSM with mobiles devices easier and put less burden on the user. 
 
-\subsection{Kernel-mode Support}
-WireGuard-HSM is written using the Go language version of WireGuard but a kernel-mode version would be more practical. The Go-version of WireGuard warns users on start-up that if they are on a supported operating system, the kernel version has better support and offers better performance. The main challenge in writing the kernel mode version will be the PKCS\#11 integration and handling user interaction between a kernel module. A small program like pkclient that handled the PKCS\#11 integration and user prompts, would be a good start. 
+\subsection{Kernel-Mode Support}
+WireGuard-HSM is written using the Go language version of WireGuard but a kernel-mode version would be more practical to most users. The Go-version of WireGuard warns users on start-up that if they are on a supported operating system, the kernel version has better support and offers better performance. The main challenge in writing the kernel mode version will be the PKCS\#11 integration and handling user interaction between a kernel module. A small program like pkclient that handled the PKCS\#11 integration and user prompts would be a good first step in expanding the functionality.
 
 \subsection{Bio-metric Authentication}
 It would be desirable for this project to use a bio-metric security key for example, a security key that uses a small fingerprint reader to authenticate the user. A bio-metric security key with X25519 support is not yet offered together but they exist in independent implementations, for example Yubico sells a security key that has fingerprint reader needed for user authentication\cite{yubico_yubikey_2022}. 
 
+\chapter{Recycling and Questions}
+This will be removed in the final paper, just keeping items here for their reuse
 
-\section {Time Table}
-\begin{center}
-\begin{tabular}{ |c|l| }
- \hline
-Week & Task \\
- \hline
-June 12th & Integrate feedback on paper - 
-Rework background section, write conclusion \\ 
-  \hline
-June 19th & Rework threat model summary - Ask committee for defense dates. 
-Formal analysis work if possible \\ 
-  \hline
-June 26th & Work on paper sections with outside reviewer / create presentation. \
-If committee can't all meet this quarter for my defense, drop class and work by myself this summer   \\  
- \hline
-July 3rd & Meet with prof Lagasse and get feedback on paper and presentation skeleton \\  
- \hline
-July 10th & integrate feedback on paper - presentation work continued \\  
- \hline
-July 17th & Paper work continued - mock presentation run \\  
- \hline
-July 24th & Meet with professor Lagesse and discuss state of paper and project.
-Formal analysis work cont  \\  
- \hline
-July 31st & Defend paper during this week  \\  
- \hline
-August 7th & integrate paper feedback from defense  \\  
- \hline
-August 14th & integrate paper feedback from defense and submit final paper  \\  
- \hline
+\subsection{questions to answer}
+Questions you need to be able to answer by your defense
 
- 
-\end{tabular}
-\end{center}
+    What is your contribution? What did you do that is worthy of being an MS Thesis/Capstone?
+
+    What measurements are you taking? Part of your paper will be showing how "good" the system is. What are you using for comparison? How do you know that it is successful?
+
+    What are the limitations? What could be done to improve those if you had more time? 
+    What are alternatives decisions you could have made as you developed this and why didn't you choose those options? 
+    We want to see that you thought through your work and that you made engineering decisions. 
+        This is one of the points of receiving an MS degree is the implication that you have rigorous decision making process within the field of your expertise.
+        
+\section{Recycling}
+
+\subsection {Conception}
+I was interested in WireGuard when it was announced but it wasn't until a group project I started in Winter 2020, where we looked at the security of WireGuard and primarily identified key handling as a potential weak point in the program, that I began to consider different approaches to improving WireGuard,  without introducing a larger attack surface or forking the project. 
+
+In Spring quarter of 2021, I took research methods in software development with Dr Erdly. During this course I continued to explore ideas that I had about WireGuard and its private key handling. I created my final project around WireGuard. In the project, I asked the question, how could WireGuard's private key handling be better? What systems could I create to improve it, and then how could I evaluate those systems?  
+In the final part of the project I create a mock survey of software engineers to rate four of the final designs. I used my own metrics to define my terms (TODO finish up this back story, get to point about compatibility)
+
+I came up with three designs that would improve key handling in WireGuard and I rated them on implementation, TODO(dig up project and look at ratings)!! In the end I chose the simplest overall design with the biggest risk being that my design relied on a security key produced by a single manufacture. No other manufacturer at the time sold a security key that supported X25519.
+
+\subsection {Starting out}
+
+I decided to start with interfacing with the NitroKey and getting familiar with the tools and commands to interact with it. I initially chose the Nitrokey start because the product page said it supported X25519\cite{noauthor_nitrokey_nodate} which is the ECDH key derivation process. After a few frustrating days I couldn't figure out how to even generate or put a curve25519 key on the nitrokey start. Searching online, I didn't see any existing software projects that interfaced with a security key for performing X25519 operations. What I did discover after pouring over NitroKey's documentation was that they recommended using a program called OpenSC to work with the Nitrokey but that only a program called GnuPG, when running in an advanced configuration mode, was capable of telling the Nitrokey to generate a set of curve25519 keys. Confusingly, GnuPG can generate the correct keys but it has no ability to perform X25519 with the security key.
+
+\subsection {OpenSC}
+Key derivation for ECDH, called X25519 in my specific case when using Curve25519 keys, requires access to Bob's private key and Alice's public key. The cryptographic operation will generate a new 'shared key' that is identical for both parties when the keys are flipped and you use Alice's private key and Bob's public key. 
+After researching the OpenSC tool support forums, I was able to find the command string that instructs a  security key to perform the key derivation operation with the correct inputs and outputs. However the tool only produced an error when I tried to use it with the Nitrokey and Alice's public key. I discovered that while NitroKey support documentation says OpenSC is the best tool to use with a Nitrokey Start, OpenSC doesn't support reading curve25519 keys! Why would this key list support for X25519 then? I found out that there was a single test that was written in OpenSC which used the PKCS\#11 interface to generate and verify a shared-secret on the hardware device. This functionality wasn't exposed to users in any way and only ran as part of a test-suite for part of the program. Technically, OpenSC could be used to test that X25519 operations worked on a hardware device but with no user control over the process. This realization set the stage for the rest of the project: technically the functionality is there but no-one has a practical implementation yet. I enjoy a challenge but I was getting worried at this point about the feasibility of completing my project on time.
+
+At this point, I realized that had I created a proof-of-concept program before starting my project, it would have been helpful in gauging how much work this project would entail. It was a frustrating start to my project, I couldn't even start on modifying WireGuard to use the NitroKey if I couldn't find a way to perform X25519.
+
+Analysing the key derivation function in OpenSC and finding the spot where reading my key failed, gave me enough information to start looking into how OpenSC read keys using OpenSSL and then I researched Curve25519 support in OpenSSL. Curve25519 support was a relatively recent addition in version 1.1 of the program\cite{noauthor_support_nodate}.
+After digging through the OpenSC tool some more and reading the OpenSSL function documentation, I was able to upgrade how OpenSC read public keys during key derivation and expand its functionality to support X25519 and get the previous command working.
+Once I had OpenSC working to perform X25519 on the key, I wrote a test that would perform the operation on the security key and also perform the operation as the other party but in software-only mode, using OpenSSL. The test would verify that the derived key was the same from both steps of the test. This test confirmed that the security key's X25519 function worked correctly and I was finally making progress.
+
+At this point, I realized that all of OpenSC's interaction with the security key is handled via the PKCS\#11 interface and that interface is compiled into a library which connects to the operating system. This library abstracts parts of the lower-level system interactions, so I wouldn't need to worry about, for example, the USB interface. I spent some time looking at how other programs use PKCS\#11 libraries to implement hardware key integration to get more familiar with this area of programming.
+
+\subsection{Interfacing}
+At this stage I had X25519 working on the security key and I understood more about PKCS\#11 and how other programs used it. This interfacing part was the area of my proposal that I understood the least. Before I started the project, I wasn't that clear about exactly how I would 'connect' X25519 operations and WireGuard. Using my software development skills that I learned at the UW, I decided it would be best to encapsulate the functionality in a program that would act as the go-between. Handing the various states of the program, user-input and error states. I could create my own limited API for a calling program to request specific actions on the security key. This approach would also reduce the amount of work I would have to do in WireGuard itself.
+
+\subsection{WireGuard Implementation Choice}
+I had assumed at the beginning of the project that I should implement my program by modifying the Linux kernel module version of WireGuard. I tried for a few days to learn how to modify and build a kernel module, which has gotten a lot more complicated and time-consuming with things such as module signing and the sheer size of the Linux kernel. I had written and built a kernel module in CSS 537 but that module didn't need to interact with external libraries or handle bi-directional user interactions. After reading the WireGuard kernel module, I decided to try reading through the Go language version of WireGuard. This version is implemented as a standalone program that can run on most operating systems. This version was easier to comprehend and understand the program flow. My project is about implementing new functionality and evaluating the system, so I decided to focus my efforts into modifying the Go version of WireGuard.
+The Go programming language has good support for modules which allows programs to easily expand their functionality by importing other code modules. After some more research, I decided to create a Golang module that handled the physical security-key interface and expose a restricted set of functionality to a calling program. 
+
+\subsection{Pkclient}
+\label{pk_design}
+The most popular and widely-used PKCS\#11 library in Go is called "miekg/pkcs11". From the GitHub repository: "This is a Go implementation of the PKCS\#11 API. It wraps the library closely, but uses Go idiom where it makes sense. It has been tested with SoftHSM."\cite{gieben_pkcs11_2022}. 
+I was worried after reading that this program was officially, only tested with SoftHSM, a common software-only version of an HSM. Before I started in earnest, I dug through openly-available public code repositories to try and find an example where someone had used this program to perform key derivation. The only example I could find was another student's class-project where they had evaluated the Go language on aspects related to RSA and ECC key-operations, but had commented out the function on key derivation for unsaid reasons \cite{quapka_go-analysis_2019}. I was worried again starting this phase of the project because it felt very similar to the claims about Nitrokey and X25519: technically this should work but there is no real-world demonstration of the functionality. Would this library actually work with my Nitrokey?
+
+I spent two weeks learning Go language and building and interactively designing a program which I named 'pkclient', to talk to the Nitrokey Start. Pkclient handles logging into the hardware key, prompting the caller for the pin, if the pin is not saved in the configuration file (optional), finding the appropriate X25519-key on the security-key and finally, once properly initialized, pkclient can handle key derivation requests and returning the derived-key back to the caller.
 
 
 \bibliographystyle{plain}
