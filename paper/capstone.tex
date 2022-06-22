@@ -45,7 +45,7 @@ WireGuard is a popular, secure, and relatively new VPN implementation that has s
 a VPN technology created in 2017 by Jason DonenFeld that operates at the network layer. It aims to be a replacement for popular TLS-based VPNs like OpenVPN and IPsec. WireGuard uses a fixed-set of cryptographic primitives and by design, has no support for negotiation of these primitives. 
 
 \item[Curve25519]
-an elliptic curve with a 256-bit key size. Designed by Daniel J. Bernstein in 2005\cite{noauthor_curve25519_nodate}. 
+an elliptic curve with a 256-bit key size. Designed by Daniel J. Bernstein in 2005\cite{bernstein_curve25519_2005}. 
 Curve25519 has a digital signature algorithm named Ed25519 and a key derivation algorithm named X25519.
 
 \item[X25519]
@@ -59,7 +59,7 @@ Authenticated encryption with additional data. A class of encryption algorithms 
 \item[ChaCha20Poly1350]
 an AEAD encryption algorithm which is composed of the ChaCha20 stream cipher and Poly1305 for message authentication code (MAC)
 
-\item[PKCS\#11] a public-key cryptography standard governed by the OASIS technical committee\cite{noauthor_cryptsoft_nodate} that defines a common interface for programs to interact with security keys, also referred to as cryptographic tokens.
+\item[PKCS\#11] a public-key cryptography standard governed by the OASIS technical committee\cite{noauthor_cryptsoft_2020} that defines a common interface for programs to interact with security keys, also referred to as cryptographic tokens.
 
 \item[Hardware security module]
 (HSM) a dedicated, physical hardware device that safeguards digital keys and provides limited-access to the resident keys for operations on messages such as encryption, decryption, verification and authentication. 
@@ -130,7 +130,7 @@ This handshake has been described as a 1.5 round-trip-time (RTT) handshake over 
 \end{figure}
 
 Let's call the initiator Alice and the peer (the responder) Bob.
-The diagram in \ref{keyflow} shows the detailed process on Alice's computer that WireGuard goes through to send a handshake initiation message. First WireGuard reads Alice's private key and Bob's public key, sending them to a key derivation process to output the Handshake precomputed-static key. Next Alice generates an ephemeral key-pair
+The diagram in \ref{fig:keyflow} shows the detailed process on Alice's computer that WireGuard goes through to send a handshake initiation message. First WireGuard reads Alice's private key and Bob's public key, sending them to a key derivation process to output the Handshake precomputed-static key. Next Alice generates an ephemeral key-pair
 
 \begin{figure}[ht]
 \includegraphics[width=6cm]{paper/images/Process_Diagram.drawio.png}
@@ -376,7 +376,7 @@ There are two main threats to this privacy.  malware infecting a computer runnin
 WireGuard-HSM's use of a USB-connected security key means a small part of its functionality is embedded inside a much less powerful computer than the on running the primary program. I wanted to see what performance impacts this design might introduce to the system. I wanted to also answer the question, would WireGuard-HSM have a noticeable impact on performance?
 
 In order to benchmark the performance of the implementations, I added a timing function that saves the current time at the beginning of the sharedSecret() function in WireGuard and DeriveNoise() in pkclient. WireGuard-HSM will still make use of sharedSecret() for ephemeral key operations.
-See section \ref{keyflow} for more details on when sharedSecret() is called vs DeriveNoise().
+See section \ref{fig:keyflow} for more details on when sharedSecret() is called vs DeriveNoise().
 
 The benchmarks were run on two computers connected via a local Gigabit Ethernet connection. 
 WireGuard-HSM ran on a desktop PC running Ubuntu 21.10 configured with an AMD Ryzen 5 2600 CPU @ 3.4GHz nominal speed and 64 GB DDR4 ram. 
