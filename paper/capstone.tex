@@ -137,9 +137,10 @@ This handshake has been described as a 1.5 round-trip-time (RTT) handshake over 
 Let's call the initiator Alice and the peer (the responder) Bob.
 The diagram in \ref{fig:keyflow} shows the detailed process on Alice's computer that WireGuard goes through to send a handshake initiation message. First, WireGuard reads Alice's private key and Bob's public key from it's configuration file, sending them to a KDF to generate the handshake's precomputed-static key. Second, Alice generates an ephemeral Curve25519 key-pair and attaches that public key to her initiation message. The ephemeral private key and the precomputed static key from step 1, are used as input to an HKDF which generates, what WireGuard refers to as the chaining key. This chaining key is the key that Alice will use for symmetric encryption of her data that she will send to Bob. (TODO Confirm) The chaining key is also used as the key for ChaCha2020 encryption function which also takes Alice's static public key as input. The encrypted form of Alice's public key is finally added to the handshake initiation message.
 
-When Bob receives this message, assuming he already has Alice's public key, he will follow this process in reverse-order. Bob will generate his own ephemeral key-pair and send the ephemeral public key in his handshake response message to Alice. The state is now identical for both peers and they each know the symmetric encryption key to decrypt data sent by the peer. It's worth noting that unlike many encryption schemes, the key to the symmetric cipher is not same in each direction because each peer chooses their own 'sending channel' key.
+When Bob receives this message, assuming he already has Alice's public key, he will follow this process in reverse-order. Bob will generate his own ephemeral key-pair and send the ephemeral public key in his handshake response message to Alice. The state is now identical for both peers and they each know the symmetric encryption key to decrypt data sent by the peer. It's worth noting that unlike many encryption schemes, the key to the symmetric cipher is not same in each direction because each peer chooses their own 'sending channel' cipher-key.
 \subsubsection{Key Rotation}
-WireGuard sessions guarantee perfect forward secrecy by including a key rotation process (rekey) between peers. This rekey event occurs after a default of 120 seconds, or after 2\textsuperscript{60} messages have been exchanged. The key rotation process is essentially another handshake process with one key difference: if Alice is the peer doing the rekey process, then in step 1 see figure \ref{fig:keyflow}, Bob's most recent ephemeral public key is used as input to the KDF instead of his static public key. This has implications for my project which we will discuss in section \ref{pk_design}
+\label{keyrotate}
+WireGuard sessions guarantee perfect forward secrecy by including a key rotation process (rekey) between peers. This rekey event occurs after a default of 120 seconds, or after 2\textsuperscript{60} messages have been exchanged. The key rotation process is essentially another handshake process with one key difference: if Alice is the peer performing the rekey process, then in step 1, see figure \ref{fig:keyflow}, Bob's most recent ephemeral public key is used as input to the KDF instead of his static public key. This has implications for my project which we will discuss in section \ref{pk_design}
 
 The WireGuard protocol has no distinction between authentication and authorization. If a peer can successfully authenticate a handshake initiation message and response, then the user is allowed to freely communicate over the session, with whatever resources may be gated on or behind the WireGuard peer.
 Now that we understand the handshake initiation process and session key rotation in more detail, it should be clear how the static private and public key, form the basis for a user's identity in WireGuard. We have also discussed how a user's identify is tied to authentication and authorization in WireGuard.
@@ -195,23 +196,47 @@ It will be necessary to understand importance of the private key and how it's us
 
 
 \chapter {Project Background}
-
 12)  2.1 -- Background is more about "what does the reader need to know that I don't expect somebody with a BS or MS in CS to know". Here you should be describing details about curve25519, Nitrokey, pkclient, GnuPG, etc that are relevant to why you did your work the way you did. (Conception)
 
-\section{Configuration}
-WireGuard configuration on the command-line is handled via a separate program called wireguard-tools \cite{noauthor_wireguard-tools_2022}. This program handles parsing a plain-text configuration file and turns the configuration directives into API calls to the separately running WireGuard daemon, which configures the virtual-interface. I wanted my program to conform as closely as possible to the WireGuard reference implementation, so I made modifications to the wireguard-tools program. I added support for an 'HSM' line in the plain-text configuration file. 
+Here we discuss key parts of the project architecture, so readers can understand the context of the different systems that were created for this project to work.
+\section{Project Design}
 
-This modification removes the requirement for defining and storing the private-key in the plain-text file. The HSM directive tells the program two, and optionally three things. First it lists the PKCS\#11 library path. Second, the slot id  to use on the security key. Thirdly and optionally, the pin required to access the slot.
+\begin{figure}[ht]
+\begin{center}
+\includegraphics[width=8cm]{paper/images/high-level-overview.png}
+\caption{High-Level System Interaction Diagram}
+\label{fig:highlevel_system}
+\end{center}
+\end{figure}
 
-The detailed workings of the PKCS\#11 interface are out of scope for this paper, however it suffices to say that for interfacing with a security-key, PKCS\#11 requires a slot ID and a secret pin-number for that slot to enable privileged operations such as key-signing or key derivation. The PKCS\#11 interface will inform the caller if they successfully logged into the slot and if the requested operation succeeded or not.
+Figure \ref{fig:highlevel_system} shows a high-level abstraction of the major WireGuard-HSM components. When WireGuard-HSM attempts to establish a new session with a peer, WireGuard-HSM interacts with pkclient which uses the PKCS\#11 interface to interface with a hardware security module over USB. 
 
-Security is a balancing act between overall system security and user-convenience. Making a system more secure can often come at expense of user-convenience. 
+\section{Nitrokey - Hardware Security Module}
 
+At the time of writing, the only commercially available HSM that offered the right features features for the project was the "Nitrokey Start" from Nitrokey in Germany\cite{noauthor_nitrokey_2022}. A few HSM list support for 'Curve25519' yet most only support Ed25519 while WireGuard only uses the X25519 algorithm of Curve25519.
+
+The Nitrokey Start connects to the computer via a USB-A interface. It securely stores cryptographic keys and provides a restricted interface based on the PKCS\#11 standard.
+The HSM safeguards private keys by only allowing authenticated users to perform a strict set of key management and cryptographic function on a slot. A slot holds private and public keys and is protected by a user pin. An HSM is also designed in such a way that physical tamping with the device should render the private-keys unreadable and useless. 
+
+\section{Pkclient}
+\label{pk_design}
+I created a standalone project called 'pkclient' to handle the interactions with the HSM and manage state. Pkclient implements functions specific to the cryptographic operations required by WireGuard but it's implemented as a standalone module to limit the required modifications to WireGuard. Pkclient itself incorporates a golang package to integrate the low-level PKCS\#11 interface calls, exposing a simplified interface to callers.  Pkclient handles the HSM session establishment, verification that the correct key-types are present on the HSM, user-interactions for pin authentication. 
+From WireGuard-HSM's point of view, pkclient is responsible for key derivation functions when the long-term static private key is needed as input, which is performed inside the HSM. When the peer session expires and performs the key rotation, described in section \ref{keyrotate}, the ephemeral public key of the peer is sent in a call to pkclient to derive the new session's shared secret. 
+
+Normally WireGuard has full-access to the long-term static private key for deriving the long-term static public key, so pkclient must also provide a function to return the public key contents, which enables the user to share their public key with other peers.
+
+
+\section{WireGuard-HSM}
+WireGuard-HSM was designed to work in a two modes, the HSM mode and the original software mode. The HSM mode has the long-term private static key completely absent, replaced by a system library path to a PKCS\#11 library path. The software mode is the original, unchanged mode that has access to the private key in the configuration file. WireGuard-HSM executes it's program flow in the same way as WireGuard-go but it used if/else statements to access the HSM or software mode. Having both modes allowed me to verify that the protocol was not changed in any way so I don't introduce new security vulnerabilities. In places where WireGuard expects access to the private key, changes were made to use the interface with pkclient for those calls instead. This approach helped me ensure that no incompatibility was introduced into the system. 
+
+Simplicity and separation of privileges were primary goals in my system design so by design WireGuard-HSM abstracts much of it's functionality over to pkclient, keeping the changes to the WireGuard-go code-base to a minimum. 
+
+Some small changes were made to the wireguard-tools package to allow configuration file changes for WireGuard-HSM to work but they out of scope for our purposes and only affect program initialization. 
 
 \chapter {Methodology}
-
+(TODO major changes here this week)
 The secrecy of a client's private key is paramount to proper client authentication and authorization in WireGuard. WireGuard's design protects many aspects of the key handling that have been error prone in past VPN designs (TODO )
-My threat model is based around the secrecy of the private key and reducing the risk found in the reference implementation of WireGuard. Since WireGuard allows clients protected-access to resources across networks, there is value for an attacker to desire access. 
+My threat model is based around the secrecy of the private key and reducing the risk found in the reference implementation of WireGuard. Since WireGuard allows clients protected-access to resources across networks, there is value for an attacker to gain access. 
 There are two main threats to this privacy.  malware infecting a computer running the reference implementation of WireGuard. The malware could be resident on the computer or it could be a single instance where a browser exploit allows an arbitrary file to be read. Our guards against malware that runs on user's computer and gains access to the plain-text configuration file for WireGuard, leaking the private key which gives the bad-actors the ability to connect to the configured wireguard-peers undetected, as the legitimate user.
 
 
@@ -225,21 +250,11 @@ I will also use some traditional software metrics to evaluate the project.
 \section{Compatibility}
 Compatibility is an important area of consideration when modifying WireGuard. Since WireGuard has no negotiation of cryptographic primitives, any project that modifies the underlying cryptographic functions or protocol, will introduce client incompatibility, leaving the modified peers only able to communicate with peers of the same type. I designed WireGuard-HSM with this in mind, to allow WireGuard-HSM peers the ability to communicate with unmodified peers.
 
-\section{Security Key}
-\begin{figure}[ht]
-\includegraphics[width=4cm]{paper/images/nitrokey.jpg}
-\caption{A picture of a NitroKey Start}
-\label{nitrokey}
-\end{figure}
 
-This distinction is important because WireGuard only uses the X25519 algorithm from Curve25519. Some security keys list support for 'Curve25519' yet most only support Ed25519.
 
-I will give a brief overview of key parts of the NitroKey start. It is hardware security key that connects to a computer via a USB-A interface. It was the only security key at time of writing that supported X25519 operations.
-The security key safeguards private keys by allows authenticated users to perform a strict set of key management and cryptographic function on a slot. A slot typically holds private and public keys. The slot is protected by a user PIN. The whole security key itself is protected by a master pin. The master pin is used to unblock a slot, if a user enters a PIN incorrectly three times. After three incorrect guesses the slot is blocked and even the correct PIN will not work on the slot. The slot must be unblocked using the master key, or the device must be erased and reset.
-
-A security key should only be inserted into a computer when its use is required and should be held by the user, on a key chain or other means. Its separation from the computer is important for creating the best security posture. We will discuss the threats that arise when these procedures are not followed by users in section \ref{wg-hsm-analysis} TODO: will we?
 
 \chapter {Evaluation}
+(TODO major changes here this week)
 \section{Threat models analysis}
 
 \subsection {WireGuard - Reference Implementation}
@@ -401,6 +416,9 @@ The mean execution time for softwareDerive() is 0.17 milliseconds and the standa
 
 WireGuard-HSM will use the slower DeriveNoise() when sending a new handshake message or processing a re-key request from a peer. Due to WireGuard's handshake protocol, this will happen every 2 minutes, per the default configuration parameters. Looking at the performance numbers I can conclude this will add approximately 74 milliseconds of extra processing time each time this function executes. The performance penalty is less than a tenth of a second, so from a human user's perspective, this should be unnoticeable. 
 
+\section{WireGuard-HSM lines of code}
+The total number lines of code (LOC) changed in WireGuard-HSM when compared to WireGuard-Go are currently 104. If we subtract changes to the Read-me file and uapi.go file which handle configuration file changes and pkclient initialization, then the lines of code changed to the core WireGuard protocol files only amount to 44 LOC changes. A very easy number of changes to audit and understand.
+
 \chapter {Discussion of Results}
 \section {Introduction}
 I will discuss the limitations of my project as well as the technical hurdles that I faced while implementing and evaluating my project.
@@ -498,13 +516,14 @@ At this stage I had X25519 working on the security key and I understood more abo
 I had assumed at the beginning of the project that I should implement my program by modifying the Linux kernel module version of WireGuard. I tried for a few days to learn how to modify and build a kernel module, which has gotten a lot more complicated and time-consuming with things such as module signing and the sheer size of the Linux kernel. I had written and built a kernel module in CSS 537 but that module didn't need to interact with external libraries or handle bi-directional user interactions. After reading the WireGuard kernel module, I decided to try reading through the Go language version of WireGuard. This version is implemented as a standalone program that can run on most operating systems. This version was easier to comprehend and understand the program flow. My project is about implementing new functionality and evaluating the system, so I decided to focus my efforts into modifying the Go version of WireGuard.
 The Go programming language has good support for modules which allows programs to easily expand their functionality by importing other code modules. After some more research, I decided to create a Golang module that handled the physical security-key interface and expose a restricted set of functionality to a calling program. 
 
-\subsection{Pkclient}
-\label{pk_design}
-The most popular and widely-used PKCS\#11 library in Go is called "miekg/pkcs11". From the GitHub repository: "This is a Go implementation of the PKCS\#11 API. It wraps the library closely, but uses Go idiom where it makes sense. It has been tested with SoftHSM."\cite{gieben_pkcs11_2022}. 
-I was worried after reading that this program was officially, only tested with SoftHSM, a common software-only version of an HSM. Before I started in earnest, I dug through openly-available public code repositories to try and find an example where someone had used this program to perform key derivation. The only example I could find was another student's class-project where they had evaluated the Go language on aspects related to RSA and ECC key-operations, but had commented out the function on key derivation for unsaid reasons \cite{quapka_go-analysis_2019}. I was worried again starting this phase of the project because it felt very similar to the claims about Nitrokey and X25519: technically this should work but there is no real-world demonstration of the functionality. Would this library actually work with my Nitrokey?
+\section{Configuration}
+WireGuard configuration on the command-line is handled via a separate program called wireguard-tools \cite{noauthor_wireguard-tools_2022}. This program handles parsing a plain-text configuration file and turns the configuration directives into API calls to the separately running WireGuard daemon, which configures the virtual-interface. I wanted my program to conform as closely as possible to the WireGuard reference implementation, so I made modifications to the wireguard-tools program. I added support for an 'HSM' line in the plain-text configuration file. 
 
-I spent two weeks learning Go language and building and interactively designing a program which I named 'pkclient', to talk to the Nitrokey Start. Pkclient handles logging into the hardware key, prompting the caller for the pin, if the pin is not saved in the configuration file (optional), finding the appropriate X25519-key on the security-key and finally, once properly initialized, pkclient can handle key derivation requests and returning the derived-key back to the caller.
+This modification removes the requirement for defining and storing the private-key in the plain-text file. The HSM directive tells the program two, and optionally three things. First it lists the PKCS\#11 library path. Second, the slot id  to use on the security key. Thirdly and optionally, the pin required to access the slot.
 
+The detailed workings of the PKCS\#11 interface are out of scope for this paper, however it suffices to say that for interfacing with a security-key, PKCS\#11 requires a slot ID and a secret pin-number for that slot to enable privileged operations such as key-signing or key derivation. The PKCS\#11 interface will inform the caller if they successfully logged into the slot and if the requested operation succeeded or not.
+
+Security is a balancing act between overall system security and user-convenience. Making a system more secure can often come at expense of user-convenience. 
 
 (TODO merge into section above
 In the WireGuard protocol, both parties are identified by their static public key.  The most important fields in the handshake message are shown in Figure \ref{fig:hand_init}.
