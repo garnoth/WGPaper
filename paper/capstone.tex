@@ -147,6 +147,7 @@ WireGuard also creates short-lived Curve25519 key pairs which are independent of
 \subsection {Identity and Handshake Initiation}
 
 \subsubsection{Handshake Initiation}
+\label{sec:handshakeInitiation}
 WireGuard assumes that each party's public key is securely exchanged out-of-band. This exchange must take place before a handshake can be performed. WireGuard refers to parties as an initiator and a responder, since there is no strict definition of client or server. A handshake is performed using an initiation message, sent by the initiator to the responder. 
 
 This handshake has been described as a 1.5 round-trip-time (RTT) handshake over UDP which is inherently connection-less. The 1.5 RTT handshake is defined by the following steps: the initiator sends a handshake initiation message, the peer responds to a properly authenticated initiation message with a handshake response message. Finally the initiator sends the first data packet. These three message are required for the session to be considered established and compose the 1.5 RTT handshake process. Consider the similarity to TCP's three-way-handshake.
@@ -174,21 +175,11 @@ Now that we understand the handshake initiation process and session key rotation
 \label{fig:handshake_process}
 \end{figure}
 
-
-\label{handshake_message}
-
-\begin{figure}[ht]
-\includegraphics[width=12cm]{paper/images/Wg_hand_init.drawio.png}
-\caption{Simplified WireGuard handshake initiation message}
-\label{fig:hand_init}
-\end{figure}
-
-
 \subsection {Identity and Portability}
 \label{identity}
 
 \begin{figure}[ht]
-\includegraphics[width=12cm]{paper/images/wg_conf_std.png}
+\frame{\includegraphics[width=12cm]{paper/images/wg_config.png}}
 \caption{Example WireGuard Configuration File from the Reference Implementation}
 \label{fig:wg_config}
 \end{figure}
@@ -230,22 +221,29 @@ Normally WireGuard has full-access to the long-term static private key for deriv
 
 
 \subsection{WireGuard-HSM}
-WireGuard-HSM was designed to work in a two modes, the HSM mode and the original software mode. The HSM mode has the long-term private static key completely absent, replaced by a system library path to a PKCS\#11 library path. The software mode is the original, unchanged mode that has access to the private key in the configuration file. WireGuard-HSM executes it's program flow in the same way as WireGuard-go but it used if/else statements to access the HSM or software mode. Having both modes allowed me to verify that the protocol was not changed in any way so I don't introduce new security vulnerabilities. In places where WireGuard expects access to the private key, changes were made to use the interface with pkclient for those calls instead. This approach helped me ensure that no incompatibility was introduced into the system. 
+WireGuard-HSM was designed to work in a two modes, the HSM mode and the original software mode. The HSM mode has the long-term private static key completely absent, replaced by a system library path to a PKCS\#11 library and the slot number on the HSM to use, see an example file in section \ref{fig:wg_hsm_config}. The software mode is the original, unchanged mode that has access to the private key in the configuration file. WireGuard-HSM executes it's program flow in the same way as WireGuard-go but it used if/else statements to access the HSM or software mode. Having both modes allowed me to verify that the protocol was not changed in any way so I don't introduce new security vulnerabilities. In places where WireGuard expects access to the private key, changes were made to use the interface with pkclient for those calls instead. This approach helped me ensure that no incompatibility was introduced into the system. 
 
 Simplicity and separation of privileges were primary goals in my system design so by design WireGuard-HSM abstracts much of it's functionality over to pkclient, keeping the changes to the WireGuard-go code-base to a minimum. 
 
-Some small changes were made to the wireguard-tools package to allow configuration file changes for WireGuard-HSM to work but they out of scope for our purposes and only affect program initialization. 
+Some small changes were made to the wireguard-tools package to allow configuration file changes for WireGuard-HSM to work but they out of scope for our purposes and only affect program initialization.
+
+\begin{figure}[ht]
+\frame{\includegraphics[width=12cm]{paper/images/wg-hsm_config.png}}
+\caption{Example WireGuard-HSM Configuration File}
+\label{fig:wg_hsm_config}
+\end{figure}
 
 \chapter {Methodology}
-(TODO major changes here this week)
+TODO WORK ON THIS
+Threat modeling WireGuard's key handling initially identified weaknesses  which informed the design of WireGuard-HSM. We will discuss that threat model in section \ref{wg-ref-analysis}.
 The secrecy of a client's private key is paramount to proper client authentication and authorization in WireGuard. WireGuard's design protects many aspects of the key handling that have been error prone in past VPN designs (TODO )
 My threat model is based around the secrecy of the private key and reducing the risk found in the reference implementation of WireGuard. Since WireGuard allows clients protected-access to resources across networks, there is value for an attacker to gain access. 
-There are two main threats to this privacy.  malware infecting a computer running the reference implementation of WireGuard. The malware could be resident on the computer or it could be a single instance where a browser exploit allows an arbitrary file to be read. Our guards against malware that runs on user's computer and gains access to the plain-text configuration file for WireGuard, leaking the private key which gives the bad-actors the ability to connect to the configured wireguard-peers undetected, as the legitimate user.
+There are two main threats to this privacy. Malware infecting a computer running the reference implementation of WireGuard. The malware could be resident on the computer or it could be a single instance where a browser exploit allows an arbitrary file to be read. Our guards against malware that runs on user's computer and gains access to the plain-text configuration file for WireGuard, leaking the private key which gives the bad-actors the ability to connect to the configured wireguard-peers undetected, as the legitimate user.
 
 
 ===this is where you describe the design of your system and justify your design choices.  Typically this chapter would also include any relevant models that you're using such as the threat model, user model, system model, etc. along with your design goals so that the reader knows exactly what problems you're trying to address and which ones are out of scope.===
 
-I will perform a comparative threat model analysis of the reference implementation and WireGuard-HSM. This analysis will show the relative strengths and weaknesses of the designs and what I have improved on.
+In the following section, I discuss the threat models for WireGuard and WireGuard-HSM, comparing WireGuard-HSM to see the relative strengths and weaknesses. This will help evaluate the system design perform a comparative threat model analysis of the reference implementation and WireGuard-HSM. This analysis will show the relative strengths and weaknesses of the designs and what I have improved on.
 
 I will also use some traditional software metrics to evaluate the project.
 
@@ -253,18 +251,16 @@ I will also use some traditional software metrics to evaluate the project.
 \section{Compatibility}
 Compatibility is an important area of consideration when modifying WireGuard. Since WireGuard has no negotiation of cryptographic primitives, any project that modifies the underlying cryptographic functions or protocol, will introduce client incompatibility, leaving the modified peers only able to communicate with peers of the same type. I designed WireGuard-HSM with this in mind, to allow WireGuard-HSM peers the ability to communicate with unmodified peers.
 
-
-
-
 \chapter {Evaluation}
-In order to assess the security of the system I have designed. I will use various threat modeling techniques to diagram the system, create attack trees and rank vulnerabilities by the simple and well-established DREAD framework. Rankings and descriptions for vulnerabilities are taken from OpenStack Security Group's use of DREAD model\cite{noauthor_securityossa-metrics_2022}.
+In order to assess the security of the system I have designed. I used various threat modeling techniques to diagram the system, create attack trees and rank threats by the simple and well-established DREAD framework. Rankings and descriptions for vulnerabilities are taken from OpenStack Security Group's use of the DREAD model\cite{noauthor_securityossa-metrics_2022}. 
 
-DREAD scores are subjective however their ranking can help us identify the relative weaknesses and priorities when addressing the system design. Scores are based on 1-10, low to high.
+DREAD scores criticized as subjective however their ranking can help us identify the relative weaknesses and priorities when addressing our system design. The scores are based on a ranking of 1-10, low to high for each category, added together and divided by the number of categories to give a final score. 
+First we will discuss the threats inherent in the WireGuard reference implementation and then we will discuss the same threats with WireGuard-HSM and see if our system design improves the system security at .
 \section{Threat models analysis}
 
 \subsection {WireGuard - Reference Implementation}
 \label{wg-ref-analysis}
-Here I present my analysis of the reference implementation of WireGuard. This threat model is focused on WireGuard's asset handling related to the private key, the security controls around it and the threat actors that could be lurking on the system. This computer running WireGuard will be considered Alice's computer and the WireGuard peer Alice connects to is Bob. Alice's computer has been turned on but Alice has not yet established a WireGuard session to Bob's computer. Refer back to section \ref{handshake_message} on how WireGuard establishes a session with a peer. 
+This threat model is focused on WireGuard's asset handling related to the private key, the security controls around it and the threat actors that could be lurking on the system. The computer running WireGuard will be considered Alice's computer and the WireGuard peer that Alice connects to is Bob. Both computers are turned on and connected to the network but Alice has not yet established a WireGuard session to Bob's computer. Refer back to section \ref{fig:handshake_process} on how WireGuard establishes a session with a peer. 
 
 \begin{figure}[ht]
 \includegraphics[width=14cm]{paper/images/WGH_DFD.drawio.png}
@@ -274,16 +270,16 @@ Here I present my analysis of the reference implementation of WireGuard. This th
 
 \subsection{Assets}
 The file system on Alice's computer contains the WireGuard configuration file \ref{fig:wg_config}. 
-Asset A01 is Alice's Curve25519-based long-term static private key. Asset A02 is Bob's connection information consisting of his static public key and internet address. It is important to note that in this threat model, both of these assets reside in the same location. Access to the configuration file gives access to both assets.
-Asset 03 is the label for any potential assets on Bob's side of the WireGuard tunnel. Access to Bob's machine might be a highly valuable asset or Bob's network access might be the highly valuable asset. Our model combines these possibilities into 'Peer Assets' for simplification.
+Asset A01 is Alice's Curve25519-based long-term static private key. Asset A02 is Bob's connection information consisting of his static public key and internet address. It is important to note that in this threat model, both of these assets reside in the same location. 
+Asset 03 is the label for any potential assets on Bob's side of the WireGuard tunnel. Access to Bob's machine might be a highly valuable asset or Bob's network access might be the highly valuable asset. This model combines these possibilities into 'Peer Assets' for simplification.
 
 \subsection{Security controls}
 Access control in WireGuard's reference implementation for A01 and A02 is C01: file system permissions. Most of the documentation indicates that sufficient file-system permissions' should be set on the WireGuard configuration file to allow only administrator access and restrict access by unprivileged users. This is not an enforced measure, meaning WireGuard will still start and not complain if the configuration file permissions are insufficient. 
 
-Access control C02, access to each WireGuard peer, is the public key trust system implemented by WireGuard. See section \ref{handshake_message} for more detail.
+Access control C02, access to each WireGuard peer, is the public key trust system implemented by WireGuard and discussed in section \ref{sec:handshakeInitiation}.
 
 \section{Threat Actor 1}
-The Primary threat to our system is TA01: a piece of malware that has gained access to Alice's computer and will search for keys in configuration files. This malware could have been delivered by acquiring a zero-day exploit or by using a known vulnerability with a piece of software running on Alice's computer. Using a known vulnerability would likely lower the cost of the attack.
+The primary threat is TA01: a piece of malware that has gained access to Alice's computer and will search for keys in configuration files. This malware could have been delivered by acquiring a zero-day exploit or by using a known vulnerability with a piece of software running on Alice's computer. Using a known vulnerability would likely lower the cost of the attack.
 
 
 \subsection{Insufficient permissions}
@@ -294,20 +290,21 @@ ATTACK 1, ATTACK 3
 If C01 is configured properly, then TA01 will need exploit one more vulnerability, in-order to gain access to A01 and A02. This offers a single layer of security so the cost of this attack cost is slightly higher. Exploit chains are common-place in today's attacks so this is a reasonable assumption.  ATTACK 2, ATTACK 4
 
 \section{Threat Actor 2}
-Our second threat actor is a malicious user who gains direct or indirect access to Alice's computer. 
+TA02 is a malicious user who gains direct or indirect access to Alice's computer.  
 
-In a direct method of attack, the second threat actor gains physical access to Alice's laptop and uses some technical or non-technical exploit to read the hard-drive. If Alice's machine uses disk-encryption then this increases the difficulty of the exploit because a second exploit must be used to read the disk contents.
+In a direct method of attack, TA02 gains physical access to Alice's laptop and uses some technical or non-technical exploit to read the hard-drive. If Alice's machine uses disk-encryption then this increases the difficulty of the exploit because a second exploit must be used to read the disk contents.
 ATTACK 5 and 6
 
-The indirect method of attack could be performed by a threat actor using social engineering tactics such as a phone-call masquerading as someone from Alice's IT department, asking her to, in some way, disclose the contents of the WireGuard configuration file, leading to disclosure of assets A01 and A02.
+The indirect method of attack could be performed by TA02 using social engineering tactics such as a phone-call or email, masquerading as someone from Alice's IT department, asking her to, in some way, disclose the contents of the WireGuard configuration file, leading to disclosure of assets A01 and A02.
 ATTACK 7
 
 \section{Vulnerabilities}
-Once any of the previously weaknesses and have been taken advantage of by a threat, and the threat actor gains access to assets A01 and A02, this allows for two classes of vulnerabilities in our WireGuard system.
+Once any of the previously weaknesses and have been taken advantage of by a threat, and the threat actor gains access to assets A01 and A02, this creates two classes of vulnerabilities in our WireGuard system.
+
 \subsection{Impersonation}
 \label{impersonation}
-Loss of A01 and A02 together allow for spoofing Alice's identidy because the attacker can complete a handshake with Bob as Alice. VPN's are commonly used as the first layer of defense for network access, so A03 could be access to a network resource that is hidden behind the WireGuard VPN or an the asset resides on Bob's computer. 
-This threatens confidentiality in our system because unauthorized parties can now masquerade as authorized users.
+Loss of A01 and A02 together allow an attacker to spoof Alice's identity because the attacker can complete a handshake with Bob as Alice. VPN's are commonly used as the first layer of defense for network access, so A03 is very attractive.
+This threatens confidentiality in our system between because unauthorized parties can now masquerade as authorized users. 
 
 \subsection{Denial-of-Service}
 \label{dos}
@@ -316,8 +313,6 @@ A Denial of Service vulnerability is also possible with the loss of A01 and A02.
 This denial of service attack would not be noticed by Bob because his WireGuard process already has a session established with Alice and will silently drop other connection attempts. Alice would only notice that she is unable to establish a session with Bob. Alice would have to communicate with Bob via alternative means, and have him look at his computer's WireGuard session output, then they would need to note that Alice's session is currently established and what remote IP has established the session.
 
 A DoS attack threatens availability in the system because Alice's connection to Bob's resources can be denied by a malicious third-party.
-
-
 
 \section{WireGuard-HSM Threat model Analysis}
 \label{wg-hsm-analysis}
@@ -329,48 +324,74 @@ This threat model is also focused on WireGuard-HSM's asset handling related to t
 \label{fig:wg_hsm_dfd}
 \end{figure}
 
-\subsubsection{Assets}
-In this model, the private key asset A01 is completely separated from the peer information asset A02. These assets now resided on physically separate system. The Peer Assets A03 represent Bob's computer or network access.
+\subsection{Assets}
+The file system on Alice's computer contains the WireGuard-HSM configuration file, example in figure \ref{fig:wg_config}. 
+Asset A01 is Alice's Curve25519-based long-term static private key. Asset A02 is Bob's connection information consisting of his static public key and internet address.
+Asset 03 is the label for any potential assets on Bob's side of the WireGuard tunnel. Access to Bob's machine might be a highly valuable asset or Bob's network access might be the highly valuable asset. This model combines these possibilities into 'Peer Assets' for simplification.
 
-\subsubsection{Security controls}
-Access to asset A01 is now behind two layers of defense. Firstly A01 is now on a physically separate system, the hardware security key. Alice must plug in her hardware security key and authenticate with a PIN, Control C01, before cryptographic operations can be performed on A01 via the PKCS\#11 interface with the session API.
-File system permissions are used to protect the Peer Information, asset A02.
-Security control C03, access to each WireGuard peer, is the public key trust system implemented by WireGuard. See section \ref{handshake_message} for more detail.
+\subsection{Security controls}
+Access to asset A01 is now behind two layers of defense. Firstly A01 is now on a physically separate system, the hardware security key. Alice must plug in the HSM and authenticate with a PIN, Control C01, before cryptographic operations can be performed on A01 via the PKCS\#11 interface with the session API.
+File system permissions are used to protect the Peer Information, A02.
+Security control C03, access to each WireGuard peer, is the public key trust system implemented by WireGuard. See section \ref{sec:handshakeInitiation} for more detail.
 
 \subsection{Threat Actor 1}
-Let us consider our primary threat, TA01: a piece of malware that has gained access to Alice's computer by some means. A plausible infection scenario might be that the malware has been delivered to Alice's machine via a compromised website advertisement which is exploiting a new web-browser vulnerability in order to escape the web-browser protections and read files on the local machine.  This malware has been programmed to look for and harvest assets on infected hosts. In our case it will look for common filenames or patterns within files, that look like WireGuard configuration files.  
+The primary threat is TA01: a piece of malware that has gained access to Alice's computer and will search for keys in configuration files. This malware could have been delivered by acquiring a zero-day exploit or by using a known vulnerability with a piece of software running on Alice's computer. Using a known vulnerability would likely lower the cost of the attack.
 
 \subsubsection{Insufficient permissions}
-If TA01 gains read-only access a single time to Alice's computer and the file system permissions were not correctly set on the WireGuard configuration file, then the threat gains access to the A02: Peer Information but not A01: Alice's Private key.
+If TA01 gains access to Alice's computer and the file system permissions were not correctly set on the WireGuard configuration file, then the threat gains access to the A02: Peer Information. Exposing the public key of a peer may be desirable but there is no direct effect or vulnerability to exploit.
+ATTACK 1 and ATTACK 3
 
 \subsubsection{Sufficient permissions}
 If C01: File system permissions, is configured properly, then TA01 will have a difficult time gaining access to A02. This offers a single layer of security, so TA01 will need to perform a pivot in order to bypass the file system permissions. Performing a pivot and gaining access to A02 at this point is less lucrative because A01: Alice's private key is still not accessible to the attacker on this system.
-
-\subsubsection{Full compromised host}
-Let's assume that Alice's computer has been fully compromised by TA01. The malware it has gained persistent, privileged access to Alice's machine. In this scenario, the malware could wait until Alice connects her security key and enters her pin to authenticate WireGuard-HSM to the peer Bob. The malware would have to wait and opportunistically take advantage of Alice's legitimate connection attempts.
-WireGuard creates a virtual tunnel that is exposed on the local system as a pseudo-network interface, e.g a TUN interface. Protecting access to the TUN interface is up to the operating system but in this scenario, the fully-compromised host would be able to use the WireGuard session while Alice is connected, leading to 
-
+ATTACK 2, ATTACK 4
 
 \subsection{Threat Actor 2}
-Our second threat actor is a malicious user who gains direct or indirect access to Alice's computer. 
+TA02 is a malicious user who gains direct or indirect access to Alice's computer. 
 
-In a direct method of attack, the threat actor 02 must gain physical access to Alice's computer and use a technical or non-technical exploit to read the hard-drive. A technical exploit might be a disk-encryption key recovery vulnerability, allowing TA02 access to the hard drive. This will only result in loss A02: Peer Information but A01 is held on Alice's security key which is safely kept on her person.
+\subsubsection{Physical Access}
+In a direct method of attack, TA02 gains physical access to Alice's laptop and uses some technical or non-technical exploit to read the hard-drive. If Alice's machine uses disk-encryption then this increases the difficulty of the exploit because a second exploit must be used to read the disk contents.
+This will only result in loss A02: Peer Information but A01 is held on Alice's security key which is safely kept on her person.
+ATTACK 5 and 6 
 
-If Alice left her security key permanently connected to her computer, then there is a risk that the threat actor could gain physical access to both Alice's laptop and her security key. However, the security key is useless, unless the threat actor also learns Alice's PIN. Brute forcing a hardware security key PIN is difficult because a PIN will become blocked after three incorrect guesses.
+If Alice left her security key permanently connected to her computer, then there is a risk that the threat actor could gain physical access to both Alice's laptop and her security key. However, the HSM alone is useless, unless the threat actor also learns Alice's PIN. Brute forcing HSM PIN is difficult because a Nitrokey Start will become blocked after three incorrect guesses.
 
-In the in-direct method of attack, the threat actor must convince Alice through social engineering tactics, to disclose the contents of A02. This information is of limited value because Alice cannot be tricked into disclosing A01. The security key does not allow anyone to export or view a private key.
-A successful social engineering attack could still be conceivably possible, if Alice was somehow convinced by the threat actor to give away physical possession of her HSM. However it seems reasonable to assume this is a high-bar for social engineering.
+This attack could go one step further but it would require a highly-sophisticated attacker. If the attacker also had knowledge of an exploit that could extract private keys from the Nitrokey Start, then an attack, however unlikely, could happen.
+ATTACK 8
+
+\subsubsection{Social Engineering}
+The indirect method of attack could be performed by TA02 using social engineering tactics, such as a phone-call or email, masquerading as someone from Alice's IT department, asking her to, in some way, disclose the contents of the WireGuard configuration file, leading to disclosure of assets A01 and A02.
+
+The HSM does not allow anyone to export or view a private key so Alice cannot be convinced to disclose it.
+A successful social engineering attack could still be conceivably possible, if Alice was somehow convinced by the threat actor to give away physical possession of her HSM and PIN number, as well as the contents of the WireGuard-HSM configuration file.
+ATTACK 9
 
 
 \section{Comparison}
-The threats to the WireGuard-HSM system are greatly reduced for Threat Actor 02. Physical access to the machine doesn't yield a successful vulnerability unless Alice leaves her security key with her computer and the attacker has learned her PIN.
+Attacks 1-7 are are shared by both WireGuard and WireGuard-HSM. The impact of Attacks 1-7 on WireGuard-HSM have almost no 'damage' because they only result in the loss of the public key information of a peer. 
+Table \ref{tab:DREAD_AVG} shows the summary of the shared attacks for both systems.
 
-Alice's fully compromised system still doesn't pose a threat to A01 because by its design, the Nitrokey Start doesn't allow exporting of private key. A user authenticated or not, cannot read the private key held in the NitroKey's key storage.
-WireGuard-HSM decouples two important assets, A01 and A02. A fully compromised host cannot exfiltrate Alice's private key. This system is not vulnerable to a denial of service attack since it requires an external third-party with knowledge of A01 and A02, to impersonate Alice's WireGuard handshake.
+\begin{table}[h!]
+  \begin{center}
+    \caption{DREAD results for shared attacks}
+    \label{tab:DREAD_AVG}
+    \begin{tabular}{l|c|r} % <-- Alignments: 1st column left, 2nd middle and 3rd right, with vertical lines in between
+      \textbf{Attack \#} & \textbf{WireGuard ref impl.} & \textbf{WireGuard-HSM}\\
+      \hline
+      1 & 6.0 & 3.4\\
+      2 & 5.6 & 3.0\\
+      3 & 5.2 & 2.6\\
+      4 & 4.6 & 2.0\\
+      5 & 5.6 & 3.0\\
+      6 & 5.2 & 2.6\\
+      7 & 6.6 & 4.0\\
+    \hline
+    Average & 5.5 & 2.9\\
+    \end{tabular}
+  \end{center}
+\end{table}
 
-Social engineering - 
-WireGuard is susceptible to a Social Engineering attack rated as difficult.
-WireGuard-HSM is susceptible to a social engineering attack rated as very difficult.  
+WireGuard-HSM reduces the average DREAD score of the shared attacks by 2.6 points.
+
 
 
 
