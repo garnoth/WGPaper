@@ -1,4 +1,8 @@
 \documentclass [11pt, proquest] {uwthesis}[2020/02/24]
+
+\usepackage{booktabs}% http://ctan.org/pkg/booktabs
+\usepackage{array}
+\usepackage{float}
 \usepackage{graphicx}
 \graphicspath{ {./images/} }
 
@@ -27,7 +31,7 @@
 \setcounter{page}{-1}
 \abstract{
 
-WireGuard is a popular, secure, and relatively new VPN implementation that has seen widespread adoption. WireGuard's basic key management in the reference implementation leaves some weaknesses that could be exploited by threat actors to steal keys, compromising a user's identity or exploit their privilege. In my project I combined the industry-standard practice of isolating sensitive data with cutting-edge support for Curve25519 keys on select security keys. I created a WireGuard-compatible fork called WireGuard-HSM which uses the PKCS\#11 interface to securely access a user's private key and perform privileged operations on a USB security key. Using a comparative threat model analysis, I show how my modifications improve the security of the system by decreasing the attack surface of WireGuard. WireGuard-HSM is more immune to malware and threat actors while allowing a user to securely 'carry' their identify with them and move between machines, all without a noticeable performance penalty.
+WireGuard is a popular, secure, and relatively new VPN implementation that has seen widespread adoption. WireGuard's basic key management in the reference implementation leaves some weaknesses that could be exploited by threat actors to steal keys, compromising a user's identity or exploit their privilege. In my project I combined the industry-standard practice of isolating sensitive data with cutting-edge support for Curve25519 keys on select security keys. I created a WireGuard-compatible fork called WireGuard-HSM which uses the PKCS\#11 interface to securely access a user's private key and perform privileged operations on a USB security key. After performing two threat model analysis and comparing the results I show how my modifications improve the security of the system by decreasing the attack surface and mitigating two vulnerabilities if the host computer is compromised. WireGuard-HSMs security improvements are shown to come without a noticeable performance penalty.
 
 }
 
@@ -54,8 +58,8 @@ an algorithm that uses Curve25519 to implement Elliptic-curve Diffie–Hellman (
 \item[AEAD]
 Authenticated encryption with additional data. A class of encryption algorithms which enforce confidentiality and authenticity of data. 
 
-\item{HKDF}
-Hashed Message Authentication Code (HMAC)-based key derivation function (HKDF). RFC5869 \cite{krawczyk_hmac-based_2010}
+\item[HKDF]
+Hashed Message Authentication Code (HMAC)-based key derivation function. RFC5869 \cite{krawczyk_hmac-based_2010}
 
 \item[AEAD]
 Authenticated encryption with additional data. A class of encryption algorithms which enforce confidentiality and authenticity of data. 
@@ -156,14 +160,14 @@ This handshake has been described as a 1.5 round-trip-time (RTT) handshake over 
 
 \begin{figure}[ht]
 \begin{center}
-\includegraphics[width=10cm]{paper/images/handshake_process.drawio}
+\includegraphics[width=10cm]{paper/images/handshake_process.png}
 \caption{Simple Handshake Packet Sequence}
 \label{fig:simpleHandSeq}
 \end{center}
 \end{figure}
 
 \begin{figure}[ht]
-\includegraphics[width=15cm]{paper/images/key-flow-wg.drawio.png}
+\includegraphics[width=15cm]{paper/images/key-flow-wg.png}
 \caption{Detailed Handshake Initiation Process}
 \label{fig:keyflow}
 \end{figure}
@@ -175,7 +179,7 @@ The diagram in \ref{fig:keyflow} shows the detailed process on Alice's computer 
 When Bob receives this message, assuming he already has Alice's public key, he will follow this process in reverse-order. Bob will generate his own ephemeral key-pair and send his ephemeral public key in his handshake response message to Alice. The chaining key mentioned earlier is also used as input into an HMAC function, so both parties can derive the sending and receiving keys for symmetric encryption of transport data.
 The state is now identical for both peers and they have each derived the the symmetric encryption key to decrypt data sent by the peer. It's worth noting that unlike many encryption schemes, the key to the symmetric cipher is not same in each direction because each peer chooses their own 'sending channel' cipher-key.
 
-A benefit of requiring that the sender include their encrypted public key, is that any party running WireGuard is resistant to active network enumeration. In order to elicit a response from a node running WireGuard, the initiator must have knowledge of the responder's public key and the responder must already have the initiators public key. This will be discussed more in section \ref{REFT}
+A benefit of requiring that the sender include their encrypted public key, is that any party running WireGuard is resistant to active network enumeration. In order to elicit a response from a node running WireGuard, the initiator must have knowledge of the responder's public key and the responder must have knowledge of the initiators public key.
 
 WireGuard uses encrypted timestamps to avoid replay attacks and it employs a novel cookie mechanism to avoid DoS attacks by unauthenticated parties however further discussion on the handshake is out of scope for this paper.
 
@@ -187,12 +191,12 @@ The WireGuard protocol has no distinction between authentication and authorizati
 Now that we understand the handshake initiation process and session key rotation in more detail, it should be clear how the initiators static private and public key, as well as the responders public key, form the basis for establishing a WireGuard session.
 
 \begin{figure}[ht]
-\includegraphics[width=6cm]{paper/images/Process_Diagram.drawio.png}
+\includegraphics[width=6cm]{paper/images/Process_Diagram.png}
 \caption{Informal Handshake Narration Process}
 \label{fig:handshake_process}
 \end{figure}
 
-\subsection {Identity and Portability}
+\subsection {Identity and Authentication}
 \label{identity}
 
 \begin{figure}[ht]
@@ -206,7 +210,6 @@ As mentioned previously, WireGuard leaves key management up to the user.
 Figure \ref{fig:wg_config} shows an example configuration file for WireGuard. The user's private, long-term static private key is under the "[Interface]" section and "[Peer]" section contains each peer's pre-shared static public key, as well as internet address information.
 
 WireGuard saves a user's private key as Base64 encoded plain-text in the configuration file. There is no support for adding a password to a private key or support for traditional digital certificates. Even Curve25519 keys generated by OpenSSL are not compatible with WireGuard, unless the ANS.1 header is stripped from it's output.
-If a user wants to carry their WireGuard identity with them and connect to the same peers from different machines, then the user must manage copying and securely transporting their configuration file, copying that private key into each machine's WireGuard configuration file manually. 
 
 \section{Nitrokey and HSMs}
 An HSM is a widely used, industry-standard device that is used to safeguard digital keys. Many HSMs undergo rigorous testing and certification, to validate their compliance with internationally recognized standards such as Federal Information Processing Standard (FIPS) and Common Criteria. They also typically use the ubiquitous and platform-independent PKCS\#11 interface. 
@@ -263,32 +266,40 @@ Some small changes were made to the 'wireguard-tools' package to allow me to mod
 
 \section{Threat Model}
 Since WireGuard and all VPN clients, allow users access to protected resources across networks, there is inherent value for an attacker to gain access to these systems.
-The attacker may be highly motivated and specifically targeting an individual or the attacker may be a 'script kiddie' deploying malware en-mass and harvesting those credentials for WireGuard nodes for later sale.
+The attacker may be highly motivated, targeting a specific individual or the attacker may be opportunistic, deploying malware en-mass and harvesting credentials of WireGuard nodes, for later sale or use.
 
 
-In the following section, I discuss the threat models for WireGuard and WireGuard-HSM, comparing WireGuard-HSM to see the relative strengths and weaknesses. This will help evaluate the system design perform a comparative threat model analysis of the reference implementation and WireGuard-HSM. This analysis will show the relative strengths and weaknesses of the designs and what I have improved on.
+In the following section, I discuss the threat models for WireGuard and WireGuard-HSM, comparing WireGuard-HSM to see the relative strengths and weaknesses. This will help us evaluate the system design and perform a comparative threat model analysis. This analysis will show the relative strengths and weaknesses of the designs and if WireGuard-HSM has improved the security of the system at all.
 
-\section{Threat Model Selection}
-In order to assess risk in both systems, I will identify and rank the risks for a given weakness based the DREAD model. I will use threat model data-flow diagrams to identify where data flows across trust boundaries.
-I used the rankings and descriptions for vulnerabilities by following OpenStack Security Group's use of the DREAD model\cite{noauthor_securityossa-metrics_2022}. I will classify vulnerabilities and mitigations using terminology from the STRIDE method\cite{hernan_uncover_2019}.
+\section{Threat Model Layout}
+In order to assess risk in both systems, I will identify and calculate the risk for a given weakness based upon the DREAD model. I will use the rankings and descriptions of risk by following OpenStack Security Group's use of the DREAD and OWASP \cite{noauthor_securityossa-metrics_2022}\cite{noauthor_threat_2022}. The five categories are defined as follows:
 
-DREAD scores are criticized as being subjective, however it's ranking can help us identify the relative strength and weaknesses when comparing risks in our nearly identical systems. The scores are based on a ranking of 1-10, low to high for each category, added together and divided by the number of categories to give a final score to the weakness. The calculation of risk is as follows:
+\begin{itemize}
+  \item \textbf{D}amage - how high is the impact of a successful attack?
+  \item \textbf{R}eproducibility - how easy it is to reproduce the attack? 
+  \item \textbf{E}xploitability - how easy is it to launch the attack?
+  \item \textbf{A}ffected users - how many people will be impacted?
+  \item \textbf{D}iscoverability - how easy it is to discover the threat?
+\end{itemize}
+
+\label{dread}
+DREAD scores are criticized as being subjective, however the calculated risk score can help us identify the relative strength and weaknesses when applied to similar systems. The scores are based on a ranking of 1-10, low to high for each category, added together and divided by the number of categories to give a final score to the weakness. The calculation of risk is as follows:
 
 "Risk = (DAMAGE + REPRODUCIBILITY + EXPLOITABILITY + AFFECTED USERS + DISCOVERABILITY) / 5"
-
-First I will analyse the risks in the WireGuard reference implementation. Second I will analyze the same risks in WireGuard-HSM and finally I will compare the results.
+I will use also use Threat Model Data-Flow Diagrams to identify where data flows across trust boundaries.
+I will classify vulnerabilities and mitigations using terminology from the STRIDE method\cite{hernan_uncover_2019}.
 
 \chapter {Threat Models and Comparison}
-
-(SAVE?? REFT)
-There are two main threats to the confidentiality of the private key. Malware infecting a computer running the reference implementation of WireGuard. The malware could be resident on the computer or it could be a single instance where a browser exploit allows an arbitrary file to be read. 
+The two threat models in the following sections are primarily concerned with how data at rest is handled by both systems. WireGuard's handling of data in transit is out of scope for the analysis.
+First I will identify and evaluate the risks in the WireGuard reference implementation. Second I will identify and evaluate the same risks and any new risks in WireGuard-HSM. Finally I will compare the results to draw my conclusions about the modifications in WireGuard-HSM.
 
 \section {WireGuard - Reference Implementation}
 \label{wg-ref-analysis}
-This threat model is focused on WireGuard's 1. Asset handling related to configuration file which contains private and public keys. 2. The security controls around the assets. 3. The threats to the system. The computer running WireGuard will be considered Alice's computer and the WireGuard peer that Alice connects to is Bob. Both computers are turned on and connected to the network but Alice has not yet established a WireGuard session to Bob's computer. Refer back to section \ref{handinit} on how WireGuard establishes a session with a peer. 
+This threat model is focused on WireGuard's: 1. Asset handling related to configuration file which contains private and public keys. 2. The security controls around the assets. 3. The threats to the system. 
+The computer running WireGuard will be considered Alice's computer and the WireGuard peer that Alice connects to is Bob. Both computers are turned on and connected to the network but Alice has not yet established a WireGuard session to Bob's computer. Refer back to section \ref{handinit} on how WireGuard establishes a session with a peer. 
 
 \begin{figure}[ht]
-\includegraphics[width=14cm]{paper/images/WGH_DFD.drawio.png}
+\includegraphics[width=14cm]{paper/images/WGH_DFD.png}
 \caption{Threat Model for the WireGuard Reference Implementation - Data Flow Diagram}
 \label{fig:wg_ref_dfd}
 \end{figure}
@@ -299,7 +310,7 @@ Asset A01 is Alice's Curve25519-based long-term static private key. Asset A02 is
 Asset 03 is the label for any potential assets on Bob's side of the WireGuard tunnel. Access to Bob's machine might be a highly valuable asset or Bob's network access might be the highly valuable asset. This model combines these possibilities into 'Peer Assets' for simplification.
 
 \subsection{Security controls}
-Access control in WireGuard's reference implementation for A01 and A02 is C01: file system permissions. Most of the documentation indicates that sufficient file-system permissions' should be set on the WireGuard configuration file to allow only administrator access and restrict access by unprivileged users. This is not an enforced measure, meaning WireGuard will still start and not complain if the configuration file permissions are insufficient. 
+Access control in WireGuard's reference implementation for A01 and A02 is C01: file system permissions. Most of the documentation indicates that sufficient file-system permissions' should be set on the WireGuard configuration file to allow only administrator access and restrict access by unprivileged users. This is not an enforced measure, meaning WireGuard will still start and not warn the user if the file permissions are insufficient. 
 
 Security control C02, access to each WireGuard peer, is the pre-shared public key system implemented by WireGuard.
 
@@ -307,50 +318,205 @@ Security control C02, access to each WireGuard peer, is the pre-shared public ke
 The primary threat is TA01: a piece of malware that has gained access to Alice's computer and will search for keys in configuration files. This malware could have been delivered by acquiring a zero-day exploit or by using a known vulnerability with a piece of software running on Alice's computer. Using a known vulnerability would likely lower the cost of the attack.
 
 \subsection{Insufficient permissions}
-If TA01 gains access to Alice's computer and the file system permissions were not correctly set on the WireGuard configuration file, then the malware gains access to A01 and A02. Access to these assets results in loss of A03 by bypassing C02. 
-REF_ATTACK_1, REF_ATTACK_3
+If TA01 gains access to Alice's computer and the file system permissions were not correctly set on the WireGuard configuration file, then the threat gains access to A01 and A02. Access to these assets results in loss of A03 by bypassing C02. 
+See table \ref{attack1-ref} and \ref{attack3-ref}.
 
 \subsection{Sufficient permissions}
-If C01 is configured properly, then TA01 will need exploit one more vulnerability, in-order to gain access to A01 and A02. This offers a single layer of security, so the cost of this attack cost is slightly higher. Exploit chains are common-place in today's attacks so this is a reasonable assumption.  
-REF_ATTACK_2, REF_ATTACK_4
+If C01 is configured properly, then TA01 will need exploit one more vulnerability, in-order to gain access to A01 and A02. This offers a single layer of security, so the cost of this attack cost is slightly higher. Exploit chains are common-place in today's attacks so this is considered a reasonable assumption.  
+See table \ref{attack2-ref} and \ref{attack4-ref}.
 
 \section{Threat Actor 2}
 TA02 is a malicious user who gains direct or indirect access to Alice's computer.  
 
 In a direct method of attack, TA02 gains physical access to Alice's laptop and uses some technical or non-technical exploit to read the hard-drive. If Alice's machine uses disk-encryption then this increases the difficulty of the exploit because a second exploit must be used to read the disk contents.
-REF_ATTACK_5 and REF_ATTACK_6
+See table \ref{attack5-ref} and \ref{attack6-ref}.
 
 The indirect method of attack could be performed by TA02 using social engineering tactics such as a phone-call or email, masquerading as someone from Alice's IT department, asking her to, in some way, disclose the contents of the WireGuard configuration file, leading to disclosure of assets A01 and A02.
-REF_ATTACK_7
+See table \ref{attack7-ref} 
 
 \section{Vulnerabilities}
 Once any of the previously weaknesses and have been taken advantage of by a threat, and the threat actor gains access to assets A01 and A02, this creates two classes of vulnerabilities in our WireGuard system.
 
 \subsection{Spoofing}
 \label{spoofing}
-Loss of A01 and A02 together allow an attacker to spoof Alice's identity because the attacker can complete a handshake with Bob as Alice. VPN's are commonly used as the first layer of defense for network access, so A03 is very attractive.
-This threatens confidentiality in our system between because unauthorized parties can now masquerade as authorized users. 
+Loss of A01 and A02 together allow an attacker to spoof Alice's identity with Bob because the attacker can complete a handshake with Bob as Alice and establish an authenticated session. VPN's are commonly used as the first layer of defense for network access, so A03 is an attractive asset.
+In this scenario, spoofing threatens authentication in our system between because unauthorized parties can now masquerade as authorized users, potentially gaining access to protected resources. 
 
 \subsection{Denial of Service}
 \label{dos}
-A Denial of Service vulnerability is also possible with the loss of A01 and A02. Once a threat can perform the impersonation of Alice, then a DoS can be leveraged against any future connection attempts that Alice's may perform with Bob. When Bob receives and establishes a session with Alice's credentials, the initiator includes a randomly generated 4-byte value as the 'sender's index'. Subsequent handshake initiation messages must include this value or the receiver will drop the packet. Once Bob has an established session with the threat, the real Alice's initiation messages won't have the right sender's index according to Bob's session table and he will drop her packets.
-
-This DoS attack wouldn't be easily noticed by Bob, there are no logs or notifications when this happens. Alice would only notice that she is unable to establish a session with Bob. Alice would have to communicate with Bob via alternative means, and have him look at his computer's WireGuard session output, then they would need to note that Alice's session is currently established and what remote IP has established the session.
+A Denial of Service vulnerability is also possible with the loss of A01 and A02. Once a threat can perform the impersonation of Alice, then a DoS could be leveraged against any future connection attempts that Alice's may perform with Bob. When Bob receives and establishes a session with Alice's credentials, the initiator includes a randomly generated 4-byte value as the 'sender's index'. Subsequent handshake initiation messages must include this value or the receiver will drop the packet. Once Bob has an established session with the threat, the real Alice's initiation messages won't have the correct, random sender's index according to Bob's session table and he will drop her packets.
 
 A DoS attack threatens availability in the system because Alice's connection to Bob's resources can be denied by a malicious third-party.
 
+\subsection{Attack Tables}
+\begin{table}[H]
+\label{attack1-ref}
+\begin{tabular}{|m{3cm}|m{.9cm}|p{27em} |}
+\multicolumn{3}{l}{Potential for: Information Disclosure, Spoofing, DoS}                   \\
+\hline
+Category & Score & Rationale                                                    \\
+\hline
+Damage          & 9     & Loss of A01, A02, A03. DoS for a single user possible            \\
+\hline
+Reproducibility & 6     & Two steps required, tooling and scripting readily available    \\
+\hline
+Exploitability & 5      & Exploit is available/understood, usable with only moderate skill by authenticated users or malware \\
+\hline
+Affected users  & 5     & At least two users are affected                     \\
+\hline
+Discoverability & 5     & Attack may be targeted - exploited by general malware infection \\
+\hline
+\multicolumn{3}{l}{\textbf{Dread Score: 6}} 
+\end{tabular}
+\caption{Attack 1 - Loss of A01 and A02 after access to configuration file by using malware delivered using a known vulnerability and the configuration file permissions are incorrectly set}
+\end{table}
+
+\begin{table}[H]
+\label{attack2-ref}
+\begin{tabular}{|m{3cm}|m{.9cm}|p{27em} |}
+\multicolumn{3}{l}{Potential for: Information Disclosure, Spoofing, DoS}                   \\
+\hline
+Category & Score & Rationale \\
+\hline
+Damage          & 9     & Loss of A01, A02, A03. DoS for a single user possible            \\
+\hline
+Reproducibility & 5     & Three steps required, tooling and scripting readily available    \\
+\hline
+Exploitability & 5      & Exploit is available/understood, usable with only moderate skill by authenticated users or malware \\
+\hline
+Affected users  & 5     & At least two users are affected                      \\
+\hline
+Discoverability & 4     & Attack may be targeted - exploited by general malware infection \\
+\hline
+\multicolumn{3}{l}{\textbf{Dread Score: 5.6}} 
+\end{tabular}
+\caption{Attack 2 - Loss of A01 and A02 after access to configuration file by using malware delivered using a known vulnerability and the configuration file permissions are correctly set}
+\end{table}
+
+\begin{table}[H]
+\label{attack3-ref}
+\begin{tabular}{|m{3cm}|m{.9cm}|p{27em} |}
+\multicolumn{3}{l}{Potential for: Information Disclosure, Spoofing, DoS}                   \\
+\hline
+Category & Score & Rationale \\
+\hline
+Damage          & 9     & Loss of A01, A02, A03. DoS for a single user possible            \\
+\hline
+Reproducibility & 4     & Two steps required, tooling and scripting readily available    \\
+\hline
+Exploitability & 4      & Advanced techniques required. General malware infection would have unimpeded access to access assets  \\
+\hline
+Affected users  & 5     & At least two users are affected                      \\
+\hline
+Discoverability & 4     & Attack may be targeted - exploited by advanced malware \\
+\hline
+\multicolumn{3}{l}{\textbf{Dread Score: 5.2}} 
+\end{tabular}
+\caption{Attack 3 - Loss of A01 and A02 after access to configuration file by using malware delivered using a zero-day exploit and the configuration file permissions are incorrectly set}
+\end{table}
+
+\begin{table}[H]
+\label{attack4-ref}
+\begin{tabular}{|m{3cm}|m{.9cm}|p{27em} |}
+\multicolumn{3}{l}{Potential for: Information Disclosure, Spoofing, DoS}                   \\
+\hline
+Category & Score & Rationale \\
+\hline
+Damage          & 9     & Loss of A01, A02, A03. DoS for a single user possible            \\
+\hline
+Reproducibility & 3     & Two steps required, tooling and scripting readily available    \\
+\hline
+Exploitability & 3      & Advanced techniques required. General malware infection would have unimpeded access to access assets  \\
+\hline
+Affected users  & 5     & At least two users are affected                      \\
+\hline
+Discoverability & 3     & Attack may be targeted - exploited by advanced malware \\
+\hline
+\multicolumn{3}{l}{\textbf{Dread Score: 4.6}} 
+\end{tabular}
+\caption{Attack 4 - Loss of A01 and A02 after access to configuration file by using malware delivered using a zero-day exploit and the configuration file permissions are correctly set}
+\end{table}
+
+\begin{table}[H]
+\label{attack5-ref}
+\begin{tabular}{|m{3cm}|m{.9cm}|p{27em} |}
+\multicolumn{3}{l}{Potential for: Information Disclosure, Spoofing, DoS}                   \\
+\hline
+Category & Score & Rationale \\
+\hline
+Damage          & 9     & Loss of A01, A02, A03. DoS for a single user possible            \\
+\hline
+Reproducibility & 4     & Two steps required. Attacker must gain physical access to the computer     \\
+\hline
+Exploitability & 7      & Exploit is understood, usable by unskilled attacker \\
+\hline
+Affected users  & 5     & At least two users are affected                      \\
+\hline
+Discoverability & 3     & Attack must be targeted to user \\
+\hline
+\multicolumn{3}{l}{\textbf{Dread Score: 5.6}} 
+\end{tabular}
+\caption{Attack 5 - Loss of A01 and A02 after access to configuration file by using physical access to unprotected machine.}
+\end{table}
+
+\begin{table}[H]
+\label{attack6-ref}
+\begin{tabular}{|m{3cm}|m{.9cm}|p{27em} |}
+\multicolumn{3}{l}{Potential for: Information Disclosure, Spoofing, DoS}                   \\
+\hline
+Category & Score & Rationale \\
+\hline
+Damage          & 9     & Loss of A01, A02, A03. DoS for a single user possible            \\
+\hline
+Reproducibility & 4     & Two steps required. Attacker must gain physical access to the computer     \\
+\hline
+Exploitability & 5      & Exploit is understood, usable by moderately skilled attacker  \\
+\hline
+Affected users  & 5     & At least two users are affected                      \\
+\hline
+Discoverability & 3     & Attack must be targeted to user \\
+\hline
+\multicolumn{3}{l}{\textbf{Dread Score: 5.2}} 
+\end{tabular}
+\caption{Attack 6 - Loss of A01 and A02 after access to configuration file by using physical access to a protected machine.}
+\end{table}
+
+\begin{table}[H]
+\label{attack7-ref}
+\begin{tabular}{|m{3cm}|m{.9cm}|p{27em} |}
+\multicolumn{3}{l}{Potential for: Information Disclosure, Spoofing, DoS}                   \\
+\hline
+Category & Score & Rationale \\
+\hline
+Damage          & 9     & Loss of A01, A02, A03. DoS for a single user possible            \\
+\hline
+Reproducibility & 4     & Two steps required. Attacker must find and convince user to disclose contents of configuration file    \\
+\hline
+Exploitability & 5      & Little technical knowledge is required but trust or deception must be used   \\
+\hline
+Affected users  & 5     & At least two users are affected                      \\
+\hline
+Discoverability & 3     & Attack is well understood  \\
+\hline
+\multicolumn{3}{l}{\textbf{Dread Score: 6.6}} 
+\end{tabular}
+\caption{Attack 7 - Loss of A01 and A02 after access to configuration file is gained by social engineering.}
+\end{table}
+
+
 \section{Vulnerability Mitigation}
 \label{vulns}
-Both of the vulnerabilities that were identified, spoofing and DoS, were only enabled once the system suffered an Information disclosure of the plain-text configuration file. We can address the root of both vulnerabilities by applying STRIDE's recommended mitigation for information disclosure which is confidentiality. 
+Both of the vulnerabilities that were identified, spoofing and DoS, were only enabled once the system suffered an information disclosure of the plain-text configuration file. We can address the root of both vulnerabilities by applying STRIDE's recommended mitigation for information disclosure which is confidentiality. 
 
-The confidentiality of the configuration file is a weakness in the design of the system but we can't store the whole configuration file securely without redesigning the entire system. I have learned that security is often a series of trade-offs, in which we must consider user convenience vs system security. If we remove just the private key from the configuration file, slightly decreasing user convenience, then both the spoofing and DoS vulnerabilities should be mitigated. 
+The confidentiality of the configuration file is a weakness in the design of the system. The entire configuration file cannot be p
+Security is often a series of trade-offs, in which system designers must consider user-convenience vs system security. If I remove the private key from the configuration file and place a security control around it, this should decrease user convenience at the benefit of increasing security and mitigating the identified risks.
 
 \section{WireGuard-HSM Threat model Analysis}
 \label{wg-hsm-analysis}
 This threat model is focused on WireGuard-HSM's asset handling related to the private key and peer public keys. All assumptions laid out for the previous threat model in section \ref{wg-ref-analysis} are the same here.
 
 \begin{figure}[ht]
-\includegraphics[width=14cm]{paper/images/WGHSM_DFD.drawio.png}
+\includegraphics[width=14cm]{paper/images/WGHSM_DFD.png}
 \caption{A Threat Model for WireGuard-HSM - Data Flow Diagram}
 \label{fig:wg_hsm_dfd}
 \end{figure}
@@ -369,67 +535,241 @@ Security control C03, access to each WireGuard peer, is the pre-shared public ke
 The primary threat is TA01: a piece of malware that has gained access to Alice's computer and will search for keys in configuration files. This malware could have been delivered by acquiring a zero-day exploit or by using a known vulnerability with a piece of software running on Alice's computer. Using a known vulnerability would likely lower the cost of the attack.
 
 \subsubsection{Insufficient permissions}
-If TA01 gains access to Alice's computer and the file system permissions were not correctly set on the WireGuard configuration file, then the threat gains access to the A02: Peer Information. Exposing the public key of a peer may be desirable but there is no direct effect or vulnerability to exploit.
-HSM_ATTACK_1 and HSM_ATTACK_3
+If TA01 gains access to Alice's computer and the file system permissions were not correctly set on the WireGuard-HSM configuration file, then the threat gains access to the A02: Peer Information. Loss of A02: Peer Information, may be desirable for an attacker but this does not enable an additional vulnerability in the system.
+See table \ref{attack1-hsm} and \ref{attack3-hsm}.
 
 \subsubsection{Sufficient permissions}
-If C01: File system permissions, is configured properly, then TA01 will have a difficult time gaining access to A02. This offers a single layer of security, so TA01 will need to perform a pivot in order to bypass the file system permissions. Performing a pivot and gaining access to A02 at this point is less lucrative because A01: Alice's private key is still not accessible to the attacker on this system.
-HSM_ATTACK_2, HSM_ATTACK_4
+If C01: File system permissions, is configured properly, then TA01 will need to use an additional exploit to bypass the file system permissions and access A02, slightly increasing the cost of the attack. Loss of A02: Peer Information, may be desirable for an attacker but this does not enable an additional vulnerability in the system.
+See table \ref{attack2-hsm} and \ref{attack4-hsm}.
 
 \subsection{Threat Actor 2}
 TA02 is a malicious user who gains direct or indirect access to Alice's computer. 
 
 \subsubsection{Physical Access}
-In a direct method of attack, TA02 gains physical access to Alice's laptop and uses some technical or non-technical exploit to read the hard-drive. If Alice's machine uses disk-encryption then this increases the difficulty of the exploit because a second exploit must be used to read the disk contents.
-This will only result in loss A02: Peer Information. A01 is held on Alice's HSM, which is safely kept on her person.
-HSM_ATTACK_5 and HSM_ATTACK_6 
+In a direct method of attack, TA02 gains physical access to Alice's computer and uses some technical or non-technical exploit to read the hard-drive. If Alice's machine uses disk-encryption then this increases the cost of the attack because a second exploit must be used to read the disk contents.
+Loss of A02: Peer Information, may be desirable for an attacker but this does not enable an additional vulnerability in the system.
+A01 is held on Alice's HSM not on the computer.
+See table \ref{attack5-hsm} and \ref{attack6-hsm}.
 
-If Alice left her HSM permanently connected to her computer, then there is a risk that the threat actor could gain physical access to both Alice's laptop and her HSM. However, the HSM alone is useless, unless the threat actor knows Alice's PIN. Brute forcing HSM PIN is difficult because a Nitrokey Start will become blocked after three incorrect guesses and further attempts will wipe the device.
+If Alice left her HSM connected to her computer, then there is a risk that the threat actor could gain physical access to both Alice's computer and her HSM. Access to the HSM is protected by C01, Alice's PIN. Brute forcing HSM PIN is very unlikely because a Nitrokey Start will become blocked after three incorrect guesses and further attempts will wipe the device.
 
-This attack could go one step further but it would require a highly-sophisticated attacker. If the attacker also had knowledge of an exploit that could extract private keys from the Nitrokey Start, then an attack, however unlikely, could happen.
-HSM_ATTACK_8
+This attack could go one step further but it would require a highly-sophisticated attacker. If the attacker had knowledge of an exploit to extract the keys from the HSM, then this attack could be successful but at a decreased likelihood due to the cost of mounting a successful attack on an HSM. Information disclosure of A01 and A02 would result in loss of A03 by allowing the bypass of C03. 
+See table \ref{attack8-hsm}.
 
 \subsubsection{Social Engineering}
 The indirect method of attack could be performed by TA02 using social engineering tactics, such as a phone-call or email, masquerading as someone from Alice's IT department, asking her to, in some way, disclose the contents of the WireGuard configuration file, leading to the disclosure of asset A02.
 
-The HSM does not allow anyone to export or view a private key so Alice cannot be convinced to disclose it.
-A successful social engineering attack could still be conceivably possible, if Alice was somehow convinced by the threat actor to give away physical possession of her HSM and PIN number, as well as the contents of the WireGuard-HSM configuration file.
-HSM_ATTACK_9
+The HSM has controls in place to prevent anyone from accessing the private key, so Alice cannot be convinced to disclose it.
+A successful social engineering attack could still be conceivably possible, if Alice was somehow convinced by the threat actor to give away physical possession of her HSM and PIN number, as well as the contents of the WireGuard-HSM configuration file. This represents a very high cost for a successful attack which decreases the likelihood that this weakness will be exploited by an attacker. 
+See table \ref{attack9-hsm}.
 
+\section{Vulnerabilities}
+\label{hsm-vulns}
+The two attacks described in HSM-ATTACK-8 and HSM-ATTACK-9 result in the same vulnerabilities in the system as described in section \ref{vulns}. These attacks require a very-high level of sophistication to carry out and come at a high-cost but it is useful to consider as many scenarios as possible.
 
-\section{Comparison}
-Attacks 1-7 are are shared by both WireGuard and WireGuard-HSM. The impact of Attacks 1-7 on WireGuard-HSM have almost no 'damage', according to DREAD. For WireGuard-HSM, the vulnerabilities identified for WireGuard in section \ref{vulns} are mitigated. Even though the system still has weaknesses that can leak the public key, our system maintains the confidentiality of the users' private key.
-
-Table \ref{tab:DREAD_AVG} shows the summary of the shared attacks for both systems.
-
-\begin{table}[h!]
-  \begin{center}
-    \caption{DREAD results for shared attacks}
-    \label{tab:DREAD_AVG}
-    \begin{tabular}{l|c|r} % <-- Alignments: 1st column left, 2nd middle and 3rd right, with vertical lines in between
-      \textbf{Attack \#} & \textbf{WireGuard ref impl.} & \textbf{WireGuard-HSM}\\
-      \hline
-      1 & 6.0 & 3.4\\
-      2 & 5.6 & 3.0\\
-      3 & 5.2 & 2.6\\
-      4 & 4.6 & 2.0\\
-      5 & 5.6 & 3.0\\
-      6 & 5.2 & 2.6\\
-      7 & 6.6 & 4.0\\
-    \hline
-    Average & 5.5 & 2.9\\
-    \end{tabular}
-  \end{center}
+\subsection{Attack Tables}
+\begin{table}[H]
+\label{attack1-hsm}
+\begin{tabular}{|m{3cm}|m{.9cm}|p{27em} |}
+\multicolumn{3}{l}{Potential for: Information Disclosure}                   \\
+\hline
+Category & Score & Rationale                                                    \\
+\hline
+Damage          & 1     & The public key of the peer is revealed            \\
+\hline
+Reproducibility & 6     & Two steps required, tooling and scripting readily available    \\
+\hline
+Exploitability & 5      & Exploit is available/understood, usable with only moderate skill by authenticated users or malware \\
+\hline
+Affected users  & 0     & There is no direct effect on any user                     \\
+\hline
+Discoverability & 5     & Attack may be targeted - exploited by general malware infection \\
+\hline
+\multicolumn{3}{l}{\textbf{Dread Score: 3.4}} 
+\end{tabular}
+\caption{Attack 1 - Loss of A02 after access to configuration file by using malware delivered using a known vulnerability and the configuration file permissions are incorrectly set.}
 \end{table}
 
-WireGuard-HSM reduces the average DREAD score of the shared attacks by 2.6 points.
+\begin{table}[H]
+\label{attack2-hsm}
+\begin{tabular}{|m{3cm}|m{.9cm}|p{27em} |}
+\multicolumn{3}{l}{Potential for: Information Disclosure}                   \\
+\hline
+Category & Score & Rationale \\
+\hline
+Damage          & 1     & Loss of A01, A02, A03. DoS for a single user possible            \\
+\hline
+Reproducibility & 5     & Three steps required, tooling and scripting readily available    \\
+\hline
+Exploitability & 5      & Exploit is available/understood, usable with only moderate skill by authenticated users or malware \\
+\hline
+Affected users  & 0     & At least two users are affected                      \\
+\hline
+Discoverability & 4     & Attack may be targeted - exploited by general malware infection \\
+\hline
+\multicolumn{3}{l}{\textbf{Dread Score: 3.0}} 
+\end{tabular}
+\caption{Attack 2 - Loss of A02 after access to configuration file by using malware delivered using a known vulnerability and the configuration file permissions are correctly set.}
+\end{table}
 
-The two attacks that are specific to the added Hardware Security Module in WireGuard-HSM had an average rating of 3.5.
-The additional component introduces new possible attacks but their risk is comparatively low. 
+\begin{table}[H]
+\label{attack3-hsm}
+\begin{tabular}{|m{3cm}|m{.9cm}|p{27em} |}
+\multicolumn{3}{l}{Potential for: Information Disclosure}                   \\
+\hline
+Category & Score & Rationale \\
+\hline
+Damage          & 1     & Loss of A01, A02, A03. DoS for a single user possible            \\
+\hline
+Reproducibility & 4     & Two steps required, tooling and scripting readily available    \\
+\hline
+Exploitability & 4      & Advanced techniques required. General malware infection would have unimpeded access to access assets  \\
+\hline
+Affected users  & 0     & At least two users are affected                      \\
+\hline
+Discoverability & 4     & Attack may be targeted - exploited by advanced malware \\
+\hline
+\multicolumn{3}{l}{\textbf{Dread Score: 2.6}} 
+\end{tabular}
+\caption{Attack 3 - Loss of A02 after access to configuration file by using malware delivered using a zero-day exploit and the configuration file permissions are incorrectly set.}
+\end{table}
 
-\section{Performance metrics}
+\begin{table}[H]
+\label{attack4-hsm}
+\begin{tabular}{|m{3cm}|m{.9cm}|p{27em} |}
+\multicolumn{3}{l}{Potential for: Information Disclosure}                   \\
+\hline
+Category & Score & Rationale \\
+\hline
+Damage          & 1     & Loss of A01, A02, A03. DoS for a single user possible            \\
+\hline
+Reproducibility & 3     & Two steps required, tooling and scripting readily available    \\
+\hline
+Exploitability & 3      & Advanced techniques required. General malware infection would have unimpeded access to access assets  \\
+\hline
+Affected users  & 0     & At least two users are affected                      \\
+\hline
+Discoverability & 3     & Attack may be targeted - exploited by advanced malware \\
+\hline
+\multicolumn{3}{l}{\textbf{Dread Score: 2.0}} 
+\end{tabular}
+\caption{Attack 4 - Loss of A02 after access to configuration file by using malware delivered using a zero-day exploit and the configuration file permissions are correctly set.}
+\end{table}
 
-\subsection{Performance}
+\begin{table}[H]
+\label{attack5-hsm}
+\begin{tabular}{|m{3cm}|m{.9cm}|p{27em} |}
+\multicolumn{3}{l}{Potential for: Information Disclosure}                   \\
+\hline
+Category & Score & Rationale \\
+\hline
+Damage          & 1     & Loss of A01, A02, A03. DoS for a single user possible            \\
+\hline
+Reproducibility & 4     & Two steps required. Attacker must gain physical access to the computer     \\
+\hline
+Exploitability & 7      & Exploit is understood, usable by unskilled attacker \\
+\hline
+Affected users  & 0     & At least two users are affected                      \\
+\hline
+Discoverability & 3     & Attack must be targeted to user \\
+\hline
+\multicolumn{3}{l}{\textbf{Dread Score: 3.0}} 
+\end{tabular}
+\caption{Attack 5 - Loss of A02 after access to configuration file by using physical access to unprotected machine. }
+\end{table}
+
+\begin{table}[H]
+\label{attack6-hsm}
+\begin{tabular}{|m{3cm}|m{.9cm}|p{27em} |}
+\multicolumn{3}{l}{Potential for: Information Disclosure}                   \\
+\hline
+Category & Score & Rationale \\
+\hline
+Damage          & 1     & Loss of A01, A02, A03. DoS for a single user possible            \\
+\hline
+Reproducibility & 4     & Two steps required. Attacker must gain physical access to the computer     \\
+\hline
+Exploitability & 5      & Exploit is understood, usable by moderately skilled attacker  \\
+\hline
+Affected users  & 0     & At least two users are affected                      \\
+\hline
+Discoverability & 3     & Attack must be targeted to user \\
+\hline
+\multicolumn{3}{l}{\textbf{Dread Score: 2.6}} 
+\end{tabular}
+\caption{Attack 6 - Loss of A02 after access to configuration file by using physical access to a protected machine. }
+\end{table}
+
+\begin{table}[H]
+\label{attack7-hsm}
+\begin{tabular}{|m{3cm}|m{.9cm}|p{27em} |}
+\multicolumn{3}{l}{Potential for: Information Disclosure}                   \\
+\hline
+Category & Score & Rationale \\
+\hline
+Damage          & 1     & Loss of A01, A02, A03. DoS for a single user possible            \\
+\hline
+Reproducibility & 5     & Two steps required. Attacker must find and convince user to disclose contents of configuration file    \\
+\hline
+Exploitability & 5      & Little technical knowledge is required but trust or deception must be used   \\
+\hline
+Affected users  & 0     & At least two users are affected                      \\
+\hline
+Discoverability & 9     & Weakness is is well understood  \\
+\hline
+\multicolumn{3}{l}{\textbf{Dread Score: 4}} 
+\end{tabular}
+\caption{Attack 7 - Loss of A02 after access to configuration file is gained by social engineering}
+\end{table}
+
+\begin{table}[H]
+\label{attack8-hsm}
+\begin{tabular}{|m{3cm}|m{.9cm}|p{27em} |}
+\multicolumn{3}{l}{Potential for: Information Disclosure, Spoofing, DoS}                   \\
+\hline
+Category & Score & Rationale \\
+\hline
+Damage          & 9     & Loss of A01, A02, A03. DoS for a single user possible            \\
+\hline
+Reproducibility & 1     & Very difficult to reproduce, may be possible once or twice  \\
+\hline
+Exploitability & 1      & Extreme level of technical exploitation needed. Possibly a Nation-State actor  \\
+\hline
+Affected users  & 5     & At least two users are affected                      \\
+\hline
+Discoverability & 3     & Intimate knowledge of the target would be needed to successfully target user \\
+\hline
+\multicolumn{3}{l}{\textbf{Dread Score: 3.8}} 
+\end{tabular}
+\caption{Attack 8 - Loss of A01 and A02 after TA02 convinces Alice to give away her HSM and disclose the contents of her WireGuard configuration file. }
+\end{table}
+
+\begin{table}[H]
+\label{attack9-hsm}
+\begin{tabular}{|m{3cm}|m{.9cm}|p{27em} |}
+\multicolumn{3}{l}{Potential for: Information Disclosure, Spoofing, DoS}                   \\
+\hline
+Category & Score & Rationale \\
+\hline
+Damage          & 9     & Loss of A01, A02, A03. DoS for a single user possible            \\
+\hline
+Reproducibility & 0     & Very hard or impossible. The vulnerability is unstable and statistically unlikely to be reliably exploited   \\
+\hline
+Exploitability & 1      & Extreme level of technical exploitation needed. Possibly a Nation-State actor   \\
+\hline
+Affected users  & 5     & At least two users are affected                      \\
+\hline
+Discoverability & 1     & Weakness is currently unknown but a targeted attacker with knowledge of the system is possible   \\
+\hline
+\multicolumn{3}{l}{\textbf{Dread Score: 3.2}} 
+\end{tabular}
+\caption{Attack 9 - Loss of A01 and A02 after TA02 breaks into the machine and uses sophisticated methods to extract the private key from the HSM }
+\end{table}
+
+
+\chapter{Performance and code evaluation}
+\section{Performance Analysis}
+
 \label{performance}
 WireGuard-HSM's use of a USB-connected HSM means a small part of its functionality is embedded inside a much less powerful computer than the computer running the WireGuard-HSM program. I wanted to see what performance impacts this design might introduce to the system. 
 
@@ -464,88 +804,139 @@ The mean execution time for DeriveHSM() is 74.9 milliseconds and the standard de
 
 The mean execution time for softwareDerive() is 0.17 milliseconds and the standard deviation is 0.02 milliseconds. The variance across all data points was too small to be significant.
 
-\section{WireGuard-HSM lines of code}
-The total number lines of code (LOC) changed in WireGuard-HSM when compared to WireGuard-Go are currently 104. If we subtract changes to the Read-me file and the uapi.go file which handles configuration file changes and pkclient initialization, then the lines of code changed to the core WireGuard protocol files only amount to 44 LOC changes. A very easy number of changes to audit and understand.
+\section{Code size}
+\label{loc}
+The total number of lines of code (LOC) changed in WireGuard-HSM when compared to WireGuard-Go is currently 104. If I only count lines of code changed to the core WireGuard protocol files, then the count drops to only 44 LOC changes. A very easy number of changes to audit and understand.
+
+The Pkclient module is 230 LOC in total.
 
 \chapter {Discussion of Results}
 Here we will discuss the results from the previous sections.
 
-\subsection{security}
-The primary threats identified in the WireGuard reference implementation was information disclosure of the private key leading to Spoofing and DoS vulnerabilities in the WireGuard system.
-The mitigation employed in WireGuard-HSM's design, is to strengthen the confidentiality of the private key. This successfully protects against information disclosure of the private key which in turn avoid the Spoofing and DoS vulnerabilities.
+\section{Threat Model Comparison}
+Attacks 1-7 are are shared by both WireGuard and WireGuard-HSM. The impact of Attacks 1-7 on WireGuard-HSM have almost no 'damage', according to the DREAD calculations. For WireGuard-HSM, the vulnerabilities identified for WireGuard in section \ref{vulns} are successfully mitigated. Even though the system still has a weakness that can be used to expose the public key of the peer, WireGuard-HSM manages to maintains the confidentiality of the users' private key.
 
-The threat model comparison shows that WireGuard-HSM reduces the DREAD score for possible weaknesses by 2.9 points on average. The damage potential is significantly reduced in the shared cases because WireGuard-HSM's design ensures confidentiality of the private key.
+Table \ref{tab:DREAD_AVG} shows the summary of the shared attacks for both systems.
 
-Our system offers a higher level of security against zero days exploits by systematically separating sensitive data from the host system.
+\begin{table}[h!]
+  \begin{center}
+    \caption{DREAD results for shared attacks}
+    \label{tab:DREAD_AVG}
+    \begin{tabular}{c|c|c}
+      \textbf{Attack \#} & \textbf{WireGuard ref impl.} & \textbf{WireGuard-HSM}\\
+      \hline
+      1 & 6.0 & 3.4\\
+      2 & 5.6 & 3.0\\
+      3 & 5.2 & 2.6\\
+      4 & 4.6 & 2.0\\
+      5 & 5.6 & 3.0\\
+      6 & 5.2 & 2.6\\
+      7 & 6.6 & 4.0\\
+    \hline
+    Avg & 5.5 & 2.9\\
+    $\sigma$ &  0.59 & 0.59\\
+    $\sigma^2$ &  0.35 & 0.35\\
+    \end{tabular}
+  \end{center}
+\end{table}
 
-The number of lines of code changed in WireGuard-HSM to the core protocol was minimal, making an audit of the code faster and relatively simple.
+If we subtract WireGuard-HSM's average DREAD score from WireGuard's average DREAD score, then WireGuard-HSM reduces the average DREAD score of these shared attack scenarios by 2.6 points.
+
+In section \ref{hsm-vulns} we considered two additional attacks for WireGuard-HSM, HSM-ATTACK-8 and HSM-ATTACK-9. 
+These two attacks have an average DREAD rating of 3.5. Their risk is low but it demonstrates that no security solution is perfect. HSM vulnerabilities may be found and users must be informed about the dangers social engineering attacks.
+A successful attack would also lead to a spoofing and DoS vulnerability in WireGuard-HSM. Since the reproducibility and exploitability of those attacks is very low, I consider it an acceptable risk for the benefits to security that WireGuard-HSM demonstraighted in attacks 1-7.
+
+
+\subsection{Attack Surface}
+The threat model analysis of WireGuard-HSM in section \ref{wg-hsm-analysis} shows that any attack against the system, where the attacker can read the sensitive configuration file, will no-longer result in the loss of the user's private key because of how WireGuard-HSM keeps sensitive data confidential. Since the confidentiality of the private-key is maintained the previous vulnerabilities in WireGuard a no longer exposed. This demonstrates that WireGuard-HSM successfully reduces in the the attack surface.
+
+The number of lines of code changed in WireGuard-HSM to the original program was minimal, making an audit of the code an easy task.
 
 \subsection{performance}
-The performance analysis shows the impact of using a USB-HSM in  WireGuard-HSM is less than a tenth of a second, so from a human user's perspective, this should be unnoticeable.
+The performance analysis shows the impact of using the Nitrokey Start, in  WireGuard-HSM is less than a tenth of a second per-handshake. If the typical use-case for WireGuard-HSM is two users establishing a session over the internet, then there should be no noticeable delay.
 
-\section{portability}
-A side-benefit of WireGuard-HSM's design is that the user's identify becomes physically portable because the private key is securely stored on a USB security key. When using WireGuard-HSM a user is able to securely carry their identify with them and use it on other machines running WireGuard-HSM.
-
-\section{Compatibility}
-WireGuard-HSM is able to perform a successful handshake and pass traffic with an unmodified WireGuard peer.
+\subsection{Compatibility}
+All tests of WireGuard-HSM were carried out by establishing a session with a peer running the reference implementation of WireGuard using the Linux kernel module. This successfully demonstrates the compatibility of WireGuard-HSM.
 
 \section {Limitations}
 In this section I will discuss the limitations of my project in regards to the completeness of the evaluation and the limitations of the project implementation itself. Significant time was spent to get the technical implementation of the project working, so I will discuss what improvements I would like to see, if I had more time to complete the evaluation of the entire system.
 
 \subsection{Formal Analysis}
-A formal analysis was identified as an aspirational goal for this project. If I had more time, I would include a formal analysis of the security properties of WireGuard-HSM. The original WireGuard protocol has been verified using the Tamarin prover\cite{donenfeld_formal_2018}, so I would also like to define and verify WireGuard-HSM in the Tamarin prover to create a symbolic model of the system. This would further demonstrate how the security properties of WireGuard-HSM are correctly maintained.
+A formal analysis was identified as an aspirational goal for this project. If I had more time, I would perform a formal analysis of the security properties of WireGuard-HSM. The original WireGuard protocol has been verified using the Tamarin prover\cite{donenfeld_formal_2018}, so I would also like to define and verify WireGuard-HSM in the Tamarin prover to create a symbolic model of the system. This would further demonstrate how the security properties of WireGuard-HSM are correctly maintained.
 
 \subsection{Mobile Operating Systems}
 I had initially planned to support mobile operating systems such as a smart-phones. Users can easily use security keys with mobile operating systems but due to technical requirements of the WireGuard protocol, a WireGuard-HSM user would have to leave their security key constantly connected
 or after 2\textsuperscript{60} messages are exchanged. This could be avoided by having users modify their WireGuard client and peer defaults to a much longer timeout for re-key, but this seems like a burdensome approach and it may not be possible for the client to request a modification of peer settings.
 
+\subsection{HSM limitations}
+Adding a physical piece of hardware like an HSM into a software system adds complexity and decreases the user-convenience of the system. The correct port-type must be available on the user's machine. HSMs can be lost, stolen, break, or wear-out. By design, the private keys on the HSM cannot be copied, so if the HSM breaks, the user will need to purchase a new one and manually go through the out of band key exchange process with a new public key.
 
-
-\chapter {Conclusion}
- 
-TODO !! In your conclusions section, you mostly focus on future work -- what are the actual conclusions you can draw from the results of your implementation, analysis, and experiments? !!
-
-I have shown that WireGuard-HSM reduces the attack surface for threat actors by moving the long-term static private key into security key. WireGuard-HSM increases the portability of a user's identity while maintaining the security of the private key. This improves the ease-of-use for the user.
-
-WireGuard-HSM increases the security by protecting the private key from threat actors.
-
-WireGuard-HSM's performance impact was shown to be negligible, only adding about a tenth of a second to the handshake process.
-WireGuard-HSM's user convenience impact was acceptable while adding physical portability to keys between machines,
+\chapter {Future work and conclusion}
 
 \section {Future Work}
-There are several areas where I would like to improve WireGuard-HSM that have been identified over the course of implementing and evaluating the system. 
+There are several areas of improvement for WireGuard-HSM that have been identified over the course of implementing and evaluating the system. 
 
 \subsection{Pin handling}
-When WireGuard-HSM starts, it prompts the user on the commandline for the PIN to the slot on the HSM. 
+When WireGuard-HSM starts, it prompts the user on the command-line for the PIN to the slot on the HSM. 
 This prompt is easy to miss and wouldn't work very well if WireGuard-HSM was implemented as a kernel module. A better approach would be to have the prompt implemented as a system-dialog window, that appears over any existing windows, making very simple for the user to omit the pin and only enter it when using WireGuard-HSM. Finding a Go-module that opens window dialogues and supports multiple operating system was deemed out of scope for this project but it will be my next addition to the program since it would increase the ease-of-use for the program. 
  
 \subsection{Security Key Diversity}
-Hardware security-key support for curve25519 and specifically X25519 is, as of writing, very limited. Nitrokey 3 is planned to support X25519 but the hardware is still not in mass production. I would like to see bio-metric hardware-keys with X25519 support, this would add an additional layer of security to our model as it further authenticates the user. As of writing, I could find no planned development for such a key. Many hardware-security keys have introduced support for near-field-communication (NFC) which makes using them with mobile devices almost seamless. Having a security-key with Curve25519 support, would make integrating WireGuard-HSM with mobiles devices easier and put less burden on the user. 
+Hardware security-key support for curve25519 and specifically X25519 is, as of writing, very limited. Nitrokey 3 is planned to support X25519 but the hardware is still not in mass production. I would like to see biometric hardware-keys with X25519 support, this would add an additional layer of security to our model as it further authenticates the user. As of writing, I could find no planned development for such a key. Many hardware-security keys have introduced support for near-field-communication (NFC) which makes using them with mobile devices almost seamless. Having a security-key with Curve25519 support, would make integrating WireGuard-HSM with mobiles devices easier and put less burden on the user. 
 
 \subsection{Kernel-Mode Support}
 WireGuard-HSM is written using the Go language version of WireGuard but a kernel-mode version would be more practical to most users. The Go-version of WireGuard warns users on start-up that if they are on a supported operating system, the kernel version has better support and offers better performance. The main challenge in writing the kernel mode version will be the PKCS\#11 integration and handling user interaction between a kernel module. A small program like pkclient that handled the PKCS\#11 integration and user prompts would be a good first step in expanding the functionality.
 
-\subsection{Bio-metric Authentication}
-It would be desirable for this project to use a bio-metric security key; for example, a security key that uses a small fingerprint reader to authenticate the user. A bio-metric security key with X25519 support is not yet offered together but they exist in independent implementations, for example Yubico sells a security key that has fingerprint reader needed for user authentication\cite{yubico_yubikey_2022}. 
+\subsection{Biometric Authentication}
+It would be desirable for this project to use a biometric security key; for example, a security key that uses a small fingerprint reader to authenticate the user. A biometric security key with X25519 support is not yet offered together but they exist in independent implementations, for example Yubico sells a security key that has fingerprint reader needed for user authentication\cite{yubico_yubikey_2022}. 
 
-\chapter{Recycling and Questions}
-This will be removed in the final paper, just keeping items here for their reuse
-
-\subsection{questions to answer}
-Questions you need to be able to answer by your defense
-
-    What is your contribution? What did you do that is worthy of being an MS Thesis/Capstone?
-
-    What measurements are you taking? Part of your paper will be showing how "good" the system is. What are you using for comparison? How do you know that it is successful?
-
-    What are the limitations? What could be done to improve those if you had more time? 
-    What are alternatives decisions you could have made as you developed this and why didn't you choose those options? 
-    We want to see that you thought through your work and that you made engineering decisions. 
-        This is one of the points of receiving an MS degree is the implication that you have rigorous decision making process within the field of your expertise.
-        
-
+\section{Conclusion}
+WireGuard-HSM helps mitigate the impact of weaknesses in the reference implementation of WireGuard by increasing the confidentiality of the user's private key. WireGuard-HSM successfully mitigates both a spoofing and DoS vulnerability found during a threat model analysis of WireGuard.
+WireGuard-HSM's performance impact is negligible and should be unnoticeable to users.
+This project offers a compelling example for more system designers to integrate a Hardware Security Module with Curve25519 support, into their product.
 
 
 \bibliographystyle{plain}
 \bibliography{references}
+
+\appendix
+
+
+
+\begin{table}[ht]
+\begin{tabular}{llllll}
+\begin{tabular}[c]{@{}l@{}}Test 1\\ HSM\end{tabular} & \begin{tabular}[c]{@{}l@{}}Test 1\\ Software\end{tabular} & \begin{tabular}[c]{@{}l@{}}Test 2\\ HSM\end{tabular} & \begin{tabular}[c]{@{}l@{}}Test 2\\ Software\end{tabular} & \begin{tabular}[c]{@{}l@{}}Test 3\\ HSM\end{tabular} & \begin{tabular}[c]{@{}l@{}}Test 3\\ Software\end{tabular} \\
+0.074625 & 0.000222 & 0.075195 & 0.00018 & 0.074567 & 0.000183 \\
+0.075144 & 0.00016 & 0.074526 & 0.000195 & 0.074839 & 0.000165 \\
+0.074853 & 0.00017 & 0.074719 & 0.000086 & 0.074444 & 0.000167 \\
+0.075121 & 0.000159 & 0.074356 & 0.000085 & 0.074543 & 0.000165 \\
+0.074688 & 0.000159 & 0.074818 & 0.000175 & 0.075265 & 0.000165 \\
+0.075275 & 0.00016 & 0.07454 & 0.000169 & 0.074292 & 0.000165 \\
+0.075482 & 0.00016 & 0.074292 & 0.000165 & 0.074961 & 0.000164 \\
+0.07468 & 0.000168 & 0.074977 & 0.000165 & 0.075102 & 0.000201 \\
+0.075142 & 0.000188 & 0.074907 & 0.000166 & 0.074971 & 0.000172 \\
+0.075259 & 0.000172 & 0.074395 & 0.000165 & 0.075421 & 0.000165 \\
+0.074472 & 0.000161 & 0.074577 & 0.000177 & 0.074457 & 0.000098 \\
+0.074809 & 0.000168 & 0.075213 & 0.00017 & 0.075326 & 0.000202 \\
+0.075128 & 0.00016 & 0.074541 & 0.000164 & 0.074649 & 0.0002 \\
+0.074773 & 0.00016 & 0.074462 & 0.000176 & 0.075058 & 0.000091 \\
+0.074744 & 0.000167 & 0.07527 & 0.000169 & 0.075316 & 0.000091 \\
+0.074798 & 0.000171 & 0.074572 & 0.000165 & 0.07518 & 0.000091 \\
+0.074298 & 0.000195 & 0.07461 & 0.000168 & 0.07516 & 0.000166 \\
+0.074475 & 0.000195 & 0.074765 & 0.000189 & 0.075529 & 0.00018 \\
+0.075175 & 0.000196 & 0.074652 & 0.000212 & 0.075783 & 0.000179 \\
+0.075066 & 0.00016 & 0.074647 & 0.000165 & 0.075094 & 0.000165 \\
+0.074905 & 0.000171 & 0.075391 & 0.000171 & 0.075116 & 0.000176 \\
+0.074811 & 0.000161 & 0.075196 & 0.000165 & 0.074684 & 0.000179 \\
+0.074932 & 0.00016 & 0.074861 & 0.000179 & 0.074531 & 0.000169 \\
+0.074969 & 0.00016 & 0.074525 & 0.000178 & 0.075348 & 0.000165 \\
+0.075188 & 0.000159 & 0.074627 & 0.000178 & 0.075074 & 0.000165 \\
+0.075258 & 0.00016 & 0.074947 & 0.000199 & 0.075354 & 0.000165 \\
+0.075104 & 0.00016 & 0.075131 & 0.000168 & 0.074877 & 0.000166 \\
+0.075275 & 0.000159 & 0.07513 & 0.000167 & 0.074998 & 0.000183 \\
+0.074619 & 0.000161 & 0.074947 & 0.000166 & 0.075389 & 0.000165 \\
+0.075087 & 0.00016 & 0.075004 & 0.000175 & 0.075642 & 0.000169 \\
+0.075038 & 0.000159 & 0.074628 & 0.000164 & 0.075108 & 0.000165 \\
+0.074364 & 0.00016 & 0.074966 & 0.00018 & 0.075239 & 0.000181
+\end{tabular}
+\end{table}
 \end{document}
