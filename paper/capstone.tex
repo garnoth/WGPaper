@@ -297,10 +297,34 @@ Risk = \frac{Dam + Rep + Exp + Aff + Disc }{5}
 %\end{center}
 %\bigskip
 
+\begin{table}[H]
+\label{Damage Potential}
+\multicolumn{2}{ l }{\textbf{Damage} - If the vulnerability is exploited, how much damage does it cause to the system?}\\
+\begin{tabular}{|m{1.5cm}|p{15cm} |}
+
+\hline
+Rating & Description \\
+\hline
+0 &  None            \\
+\hline
+1 &  Individual user data is exposed. A public key is exposed \\
+\hline
+3 &  All individual public keys are exposed         \\
+\hline
+5 &  System availability impacted intermittently          \\
+\hline
+7 &  Single user DoS possible or loss of a private key  \\
+\hline
+9 &  Major system compromise. Loss of private keys and peer public keys. DoS possible. \\
+\hline
+10 & Complete system compromise. Loss of all private and public keys. DoS possible and decryption of peer traffic possible.\\
+\hline
+\end{tabular}
+
+\end{table}
 
 \textbf{Damage Potential}
-If the vulnerability is exploited, how much damage does it cause to the system?
-\begin{small}
+If the vulnerability is exploited, how much damage will it cause to the system?
 \begin{itemize}
 \label{dread:damage}
 	\item 0 - None
@@ -312,8 +336,7 @@ If the vulnerability is exploited, how much damage does it cause to the system?
     \item 9 - Major system compromise. Loss of private key and peer public keys. DoS possible.
     \item 10 - Complete system compromise. Loss of private key and all peer public keys exposed, in-memory cipher keys exposed. DoS possible and decryption of peer traffic possible.
 \end{itemize}
-\end{small}
-\bigskip
+\medskip
 
 \begin{small}
 \textbf{Reproducibility}
@@ -476,6 +499,7 @@ Discoverability & 4     & Attack may be targeted - exploited by general malware 
 \end{tabular}
 \caption{Attack 2 - Loss of A01 and A02 after access to configuration file by using malware delivered using a known vulnerability and the configuration file permissions are correctly set}
 \end{table}
+
 \begin{table}[H]
 \label{attack4-ref}
 \begin{tabular}{|m{3cm}|m{.9cm}|p{27em} |}
