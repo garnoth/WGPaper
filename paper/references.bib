@@ -1,11 +1,141 @@
 
-@misc{noauthor_threat_2022,
+@misc{bernstein_wireguard-nt_2022,
+	title = {wireguard-nt - {WireGuard} implementation for {NT} kernel},
+	shorttitle = {{WireGuard} for the {NT} {Kernel}},
+	url = {https://git.zx2c4.com/wireguard-nt/about/},
+	language = {English},
+	urldate = {2021-08-20},
+	journal = {High performance in-kernel WireGuard implementation for Windows},
+	author = {Bernstein, Daniel J.},
+	year = {2022},
+}
+
+@article{donenfeld_formal_2018,
+	title = {Formal {Verification} of the {WireGuard} {Protocol}},
+	url = {https://www.wireguard.com/papers/wireguard-formal-verification.pdf},
+	abstract = {WireGuard, the secure network tunnel, uses an interesting DiﬃeHellman authenticated key exchange protocol based on NoiseIK, custom tailored to suit its unique operational requirements. This paper enumerates the security properties of this key exchange and then explores the formal veriﬁcation of such properties. The end result is a formally veriﬁed secure network tunnel protocol.},
+	language = {en},
+	journal = {None},
+	author = {Donenfeld, Jason A and Kevin Milner},
+	year = {2018},
+	pages = {11},
+}
+
+@misc{bernstein_safecurves_2022,
+	title = {{SafeCurves}: {Introduction}},
+	url = {https://safecurves.cr.yp.to/},
+	language = {English},
+	urldate = {2022-03-19},
+	journal = {SafeCurves: choosing safe curves for elliptic-curve cryptography},
+	author = {Bernstein, Daniel J.},
+	month = mar,
+	year = {2022},
+	keywords = {safe},
+}
+
+@misc{yubico_discover_2021,
+	title = {Discover {YubiKey} 5 {\textbar} {Strong} {Authentication} for {Secure} {Login}},
+	url = {https://www.yubico.com/products/yubikey-5-overview/},
+	abstract = {Check out the \#1 security key lineup that provides strong two-factor, multi-factor and passwordless authentication!},
+	language = {en-US},
+	urldate = {2021-07-06},
+	journal = {Yubico},
+	author = {Yubico},
+	year = {2021},
+}
+
+@misc{cryptsoft_cryptsoft_2020,
+	title = {Cryptsoft},
+	url = {https://www.cryptsoft.com/pkcs11doc/},
+	urldate = {2022-03-14},
+	author = {cryptsoft},
+	year = {2020},
+	keywords = {oasis, pkcs11},
+}
+
+@misc{nitrokey_nitrokey_2022,
+	title = {Nitrokey {Start}},
+	url = {https://shop.nitrokey.com/shop/product/nksa-nitrokey-start-6},
+	language = {en-US},
+	urldate = {2022-03-08},
+	journal = {Nitrokey GmbH},
+	author = {Nitrokey},
+	year = {2022},
+	keywords = {nksa},
+}
+
+@misc{ianix_things_2022,
+	title = {Things that use {Curve25519}},
+	url = {https://ianix.com/pub/curve25519-deployment.html},
+	urldate = {2021-07-06},
+	journal = {Things that use Curve25519},
+	author = {IANIX},
+	month = jun,
+	year = {2022},
+}
+
+@misc{openstack_securityossa-metrics_2022,
+	title = {Security/{OSSA}-{Metrics} - {OpenStack}},
+	shorttitle = {Security/{OSSA}-{Metrics}},
+	url = {https://wiki.openstack.org/wiki/Security/OSSA-Metrics#DREAD},
+	urldate = {2022-06-29},
+	author = {OpenStack},
+	month = jun,
+	year = {2022},
+	keywords = {dread},
+}
+
+@misc{owasp_threat_2022,
 	title = {Threat {Modeling} - {OWASP} {Cheat} {Sheet} {Series}},
 	shorttitle = {Threat {Modeling} {Cheat} {Sheet}},
 	url = {https://cheatsheetseries.owasp.org/cheatsheets/Threat_Modeling_Cheat_Sheet.html},
 	urldate = {2022-07-01},
+	author = {OWASP},
 	month = jul,
 	year = {2022},
+}
+
+@article{sasdrich_implementing_2015,
+	title = {Implementing {Curve25519} for {Side}-{Channel}--{Protected} {Elliptic} {Curve} {Cryptography}},
+	volume = {9},
+	issn = {1936-7406},
+	url = {https://doi.org/10.1145/2700834},
+	doi = {10.1145/2700834},
+	abstract = {For security-critical embedded applications Elliptic Curve Cryptography (ECC) has become the predominant cryptographic system for efficient key agreement and digital signatures. However, ECC still involves complex modular arithmetic that is a particular burden for small processors. In this context, Bernstein proposed the highly efficient ECC instance Curve25519 that particularly enables efficient software implementations at a security level comparable to AES-128 with inherent resistance to simple power analysis (SPA) and timing attacks. In this work, we show that Curve25519 is likewise competitive on FPGAs even when countermeasures to thwart side-channel power analysis are included. Our basic multicore DSP-based architectures achieves a maximal performance of more than 32,000 point multiplications per second on a Xilinx Zynq 7020 FPGA. Including a mix of side-channel countermeasures to impede simple and differential power analysis, we still achieve more than 27,500 point multiplications per second with a moderate increase in logic resources.},
+	number = {1},
+	urldate = {2022-11-20},
+	journal = {ACM Transactions on Reconfigurable Technology and Systems},
+	author = {Sasdrich, Pascal and Güneysu, Tim},
+	month = nov,
+	year = {2015},
+	keywords = {Curve25519, Diffie-Hellman, ECC, Side-Channel Attacks, Zynq},
+	pages = {3:1--3:15},
+}
+
+@inproceedings{kaur_critical_2017,
+	title = {Critical: {Threat} model for an outsourcing business},
+	shorttitle = {Critical},
+	doi = {10.1109/ICCCNT.2017.8204093},
+	abstract = {The increasing dependence of business organizations on information systems has established information security as a serious concern for successful business operations. There are a series of security challenges related to process outsourcing which calls for a need of a proactive approach to detect threats and provides suitable guidelines for the same. One of the solutions for incorporating preventive security controls is to use Threat Modeling as a measure to ensure that security is implemented at an early stage. In this paper, a Threat Model has been proposed in accordance to business process outsourcing which assists in identifying security issues during the design phase of the process. It allows the corresponding decisions to be made rationally, with all the information on the table. Threat trees are also used for detail identification of threats. For the purpose of quantification of threats, DREAD Model has been used which helps in computing the security risks and prioritizing the threats. And ultimately, the Threat Model has been validated by implementing it on an outsourced process.},
+	booktitle = {2017 8th {International} {Conference} on {Computing}, {Communication} and {Networking} {Technologies} ({ICCCNT})},
+	author = {Kaur, Komalpreet and Sharma, Rishabh},
+	month = jul,
+	year = {2017},
+	keywords = {Computational modeling, Information security, Organizations, Outsourcing, Threat, Tools, attack, dread, process outsourcing, risk level, security, vulnerability},
+	pages = {1--5},
+}
+
+@misc{chee_awesome_2022,
+	title = {Awesome {WireGuard}},
+	copyright = {MIT},
+	url = {https://github.com/cedrickchee/awesome-wireguard},
+	abstract = {A curated list of WireGuard tools, projects, and resources.},
+	urldate = {2022-11-08},
+	author = {Chee, Cedric},
+	month = nov,
+	year = {2022},
+	note = {original-date: 2021-06-29T13:54:42Z},
+	keywords = {awesome, awesome-list, curated-list, mesh-network, vpn, wireguard},
 }
 
 @misc{hernan_uncover_2019,
@@ -33,25 +163,6 @@
 	keywords = {stride},
 }
 
-@misc{noauthor_securityossa-metrics_2022,
-	title = {Security/{OSSA}-{Metrics} - {OpenStack}},
-	shorttitle = {Security/{OSSA}-{Metrics}},
-	url = {https://wiki.openstack.org/wiki/Security/OSSA-Metrics#DREAD},
-	urldate = {2022-06-29},
-	month = jun,
-	year = {2022},
-	keywords = {dread},
-}
-
-@misc{noauthor_things_2022,
-	title = {Things that use {Curve25519}},
-	url = {https://ianix.com/pub/curve25519-deployment.html},
-	urldate = {2021-07-06},
-	journal = {Things that use Curve25519},
-	month = jun,
-	year = {2022},
-}
-
 @techreport{krawczyk_hmac-based_2010,
 	type = {Request for {Comments}},
 	title = {{HMAC}-based {Extract}-and-{Expand} {Key} {Derivation} {Function} ({HKDF})},
@@ -68,14 +179,6 @@
 	keywords = {hkdf},
 }
 
-@misc{noauthor_securing_nodate,
-	title = {Securing {WireGuard} private keys with a hardware token},
-	url = {https://www.overleaf.com/project/6226af86fca19147369c37cb},
-	abstract = {An online LaTeX editor that’s easy to use. No installation, real-time collaboration, version control, hundreds of LaTeX templates, and more.},
-	language = {en},
-	urldate = {2022-06-22},
-}
-
 @misc{bernstein_curve25519_2005,
 	title = {Curve25519: high-speed elliptic-curve cryptography},
 	url = {https://cr.yp.to/ecdh.html},
@@ -85,24 +188,6 @@
 	author = {Bernstein, Daniel J.},
 	year = {2005},
 	keywords = {curve25519},
-}
-
-@misc{noauthor_nitrokey_2022,
-	title = {Nitrokey {Start}},
-	url = {https://shop.nitrokey.com/shop/product/nksa-nitrokey-start-6},
-	language = {en-US},
-	urldate = {2022-03-08},
-	journal = {Nitrokey GmbH},
-	year = {2022},
-	keywords = {nksa},
-}
-
-@misc{noauthor_cryptsoft_2020,
-	title = {Cryptsoft},
-	url = {https://www.cryptsoft.com/pkcs11doc/},
-	urldate = {2022-03-14},
-	year = {2020},
-	keywords = {oasis, pkcs11},
 }
 
 @misc{donenfeld_performance_2018,
@@ -151,34 +236,6 @@
 	year = {2022},
 	note = {original-date: 2012-09-20T13:32:28Z},
 	keywords = {c, go, hsm, miegk, pkcs11, softhsm},
-}
-
-@article{sasdrich_implementing_2015,
-	title = {Implementing {Curve25519} for {Side}-{Channel}--{Protected} {Elliptic} {Curve} {Cryptography}},
-	volume = {9},
-	issn = {1936-7406},
-	url = {http://doi.org/10.1145/2700834},
-	doi = {10.1145/2700834},
-	abstract = {For security-critical embedded applications Elliptic Curve Cryptography (ECC) has become the predominant cryptographic system for efficient key agreement and digital signatures. However, ECC still involves complex modular arithmetic that is a particular burden for small processors. In this context, Bernstein proposed the highly efficient ECC instance Curve25519 that particularly enables efficient software implementations at a security level comparable to AES-128 with inherent resistance to simple power analysis (SPA) and timing attacks. In this work, we show that Curve25519 is likewise competitive on FPGAs even when countermeasures to thwart side-channel power analysis are included. Our basic multicore DSP-based architectures achieves a maximal performance of more than 32,000 point multiplications per second on a Xilinx Zynq 7020 FPGA. Including a mix of side-channel countermeasures to impede simple and differential power analysis, we still achieve more than 27,500 point multiplications per second with a moderate increase in logic resources.},
-	number = {1},
-	urldate = {2022-03-20},
-	journal = {ACM Transactions on Reconfigurable Technology and Systems},
-	author = {Sasdrich, Pascal and Güneysu, Tim},
-	month = nov,
-	year = {2015},
-	keywords = {Curve25519, Diffie-Hellman, ECC, Side-Channel Attacks, Zynq, sidechannel},
-	pages = {3:1--3:15},
-}
-
-@misc{noauthor_safecurves_2022,
-	title = {{SafeCurves}: {Introduction}},
-	url = {https://safecurves.cr.yp.to/},
-	language = {English},
-	urldate = {2022-03-19},
-	journal = {SafeCurves: choosing safe curves for elliptic-curve cryptography},
-	month = mar,
-	year = {2022},
-	keywords = {safe},
 }
 
 @inproceedings{lipp_mechanised_2019,
@@ -264,16 +321,6 @@
 	year = {2017},
 }
 
-@article{donenfeld_formal_2018,
-	title = {Formal {Verification} of the {WireGuard} {Protocol}},
-	url = {https://www.wireguard.com/papers/wireguard-formal-verification.pdf},
-	abstract = {WireGuard, the secure network tunnel, uses an interesting DiﬃeHellman authenticated key exchange protocol based on NoiseIK, custom tailored to suit its unique operational requirements. This paper enumerates the security properties of this key exchange and then explores the formal veriﬁcation of such properties. The end result is a formally veriﬁed secure network tunnel protocol.},
-	language = {en},
-	author = {Donenfeld, Jason A and Kevin Milner},
-	year = {2018},
-	pages = {11},
-}
-
 @inproceedings{appelbaum_tiny_2019,
 	address = {Cham},
 	series = {Lecture {Notes} in {Computer} {Science}},
@@ -337,12 +384,6 @@ ISSN: 1611-3349},
 	keywords = {cv25519},
 }
 
-@misc{noauthor_wireguard-nt_nodate,
-	title = {wireguard-nt - {WireGuard} implementation for {NT} kernel},
-	url = {https://git.zx2c4.com/wireguard-nt/about/},
-	urldate = {2021-08-20},
-}
-
 @misc{noauthor_wireguard_nodate,
 	title = {wireguard « net « drivers - wireguard-linux - {WireGuard} for the {Linux} kernel},
 	url = {https://git.zx2c4.com/wireguard-linux/tree/drivers/net/wireguard/},
@@ -366,23 +407,6 @@ ISSN: 1611-3349},
 	year = {2019},
 	note = {arXiv: 1902.03256},
 	keywords = {Computer Science - Cryptography and Security},
-}
-
-@misc{noauthor_discover_nodate,
-	title = {Discover {YubiKey} 5 {\textbar} {Strong} {Authentication} for {Secure} {Login}},
-	url = {https://www.yubico.com/products/yubikey-5-overview/},
-	abstract = {Check out the \#1 security key lineup that provides strong two-factor, multi-factor and passwordless authentication!},
-	language = {en-US},
-	urldate = {2021-07-06},
-	journal = {Yubico},
-}
-
-@misc{noauthor_nitrokey_nodate,
-	title = {Nitrokey {Start}},
-	url = {https://shop.nitrokey.com/shop/product/nk-sta-nitrokey-start-6},
-	language = {en-US},
-	urldate = {2021-07-06},
-	journal = {Nitrokey GmbH},
 }
 
 @inproceedings{wu_sewg_2020-1,
@@ -567,15 +591,6 @@ ISSN: 1611-3349},
 	url = {https://sc4.us/hsm/buy.html},
 	urldate = {2021-05-31},
 	keywords = {SC4},
-}
-
-@misc{noauthor_frontpage_nodate,
-	title = {Frontpage},
-	url = {https://www.nitrokey.com/frontpage},
-	abstract = {Be prepared for the awesome secure Nitrokey! Subscribe to the upcoming crowdfunding campaign. \#SecureYourDigitalLife https://nitrokey.com/},
-	language = {en},
-	urldate = {2021-05-31},
-	keywords = {nitro},
 }
 
 @misc{noauthor_yubihsm2_nodate,
@@ -1108,21 +1123,21 @@ The sensors use Bluetooth LE to commun...},
 	keywords = {devices},
 }
 
-@misc{noauthor_amazoncom_nodate-1,
+@misc{noauthor_amazoncom_nodate,
 	title = {Amazon.com : {ECOWITT} {WH51} {Soil} {Moisture} {Sensor} {Max} 8 {Channels} {Soil} {Humidity} {Tester} - {Accessory} {Only}, {Can} {Not} {Be} {Used} {Alone} : {Garden} \& {Outdoor}},
 	url = {https://www.amazon.com/ECOWITT-Moisture-Sensor-Humidity-Tester/dp/B07JM621R3/ref=sr_1_4?dchild=1&keywords=soil+humidity+sensor+wireless&qid=1615591953&sr=8-4},
 	urldate = {2021-03-12},
 	keywords = {devices},
 }
 
-@misc{noauthor_amazoncom_nodate-2,
+@misc{noauthor_amazoncom_nodate-1,
 	title = {Amazon.com: {SensorPush} {Wireless} {Thermometer}/{Hygrometer} for {iPhone}/{Android} - {Humidity} \& {Temperature} {Smart} {Sensor} with {Alerts}. {Developed} and {Supported} in {The} {USA}: {Home} \& {Kitchen}},
 	url = {https://www.amazon.com/SensorPush-Wireless-Thermometer-Hygrometer-Android/dp/B01AEQ9X9I/ref=sr_1_2?dchild=1&keywords=soil+humidity+sensor+wireless&qid=1615591953&sr=8-2},
 	urldate = {2021-03-12},
 	keywords = {devices},
 }
 
-@misc{noauthor_amazoncom_nodate-3,
+@misc{noauthor_amazoncom_nodate-2,
 	title = {Amazon.com : {XLUX} {Soil} {Moisture} {Meter}, {Plant} {Water} {Monitor}, {Soil} {Hygrometer} {Sensor} for {Gardening}, {Farming}, {Indoor} and {Outdoor} {Plants}, {No} {Batteries} {Required} : {Garden} \& {Outdoor}},
 	url = {https://www.amazon.com/XLUX-Soil-Moisture-Sensor-Meter/dp/B014MJ8J2U/ref=sr_1_2?dchild=1&keywords=soil+humidity+sensor&qid=1615591918&sr=8-2},
 	urldate = {2021-03-12},
