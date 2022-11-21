@@ -1,5 +1,5 @@
 \documentclass [11pt, proquest] {uwthesis}[2020/02/24]
-
+\setlength{\textfloatsep}{2.0pt plus 2.0pt minus 2.0pt}
 \usepackage{booktabs}% http://ctan.org/pkg/booktabs
 \usepackage{array}
 \usepackage{float}
@@ -73,7 +73,7 @@ Authenticated encryption with additional data. A class of encryption algorithms 
 \item[ChaCha20Poly1350]
 an AEAD encryption algorithm which is composed of the ChaCha20 stream cipher and Poly1305 for message authentication code (MAC)
 
-\item[PKCS\#11] a platform-independent interface standard for interacting with cyrptographic tokens governed by the OASIS technical committee\cite{cryptsoft_cryptsoft_2020}.
+\item[PKCS\#11] a platform-independent interface standard for interacting with cyrptographic tokens governed by the OASIS technical committee\cite{cryptsoft_pty_ltd_cryptsoft_2020}.
 It defines a common interface for programs to interact with security keys, also referred to as cryptographic tokens.
 
 \item[Hardware security module]
@@ -113,7 +113,7 @@ WireGuard's key management has been investigated by other researchers, I briefly
 In this project, my primary goal is to increase the security of WireGuard by improving it's key handling. I want to use well established methods in the computer security field to achieve this goal, without sacrificing compatibility. Instead of proposing compatibility-breaking changes, my secondary goal was to work within the confines of the existing protocol and maintain client compatibility, while improving security. I also wanted to understand what performance implications my design choices would impose on the system. System performance is discussed in section \ref{performance}
 
 \subsection{Outline}
-I will discuss WireGuard's authentication and identify mechanisms as well as the handshake process, in enough detail so readers can understand why my changes are relevant.
+I will discuss WireGuard's authentication and authorization mechanisms during the handshake process, in enough detail so readers can understand why my changes are relevant.
 I will show how weaknesses in WireGuard's key management could lead to a threat actor compromising a private key and thereby a user's identity. 
 I will briefly discuss what happens to the WireGuard system when a user's identify is compromised and why a threat actor might want to do this.
 I will show how the security architecture design WireGuard-HSM safeguards a user's identity in the same scenarios.
@@ -155,8 +155,10 @@ These ephemeral key-pairs are valid for a default of 2 minutes per session, whic
 \section {Session Establishment}
 \label{session_establish}
 \begin{wrapfigure}{r}{0.5\textwidth}
+\centering
+\itemsep0em 
 \includegraphics[width=8cm]{paper/images/simp-handshake_process.png}
-\caption{Simplified Handshake Diagram - Packet Sequence }
+\caption{Simplified Handshake Packet Sequence Diagram }
 \label{fig:simpleHandSeq}
 \end{wrapfigure} 
 WireGuard assumes that each party's public key is securely exchanged out-of-band. This exchange must take place before a handshake can be performed. 
@@ -185,39 +187,38 @@ WireGuard uses encrypted timestamps to avoid replay attacks and it employs a nov
 WireGuard sessions guarantee perfect forward secrecy by including a key rotation process (rekey) between peers. This rekey event occurs after a default of 120 seconds, or after 2\textsuperscript{60} messages have been exchanged. The key rotation process is essentially another handshake process with one key difference: if Alice is the peer performing the rekey process, then in step 1, see Figure\ref{fig:keyflow}, Bob's most recent ephemeral public key is used as input to the KDF instead of his static public key. This has implications for my project which we will discuss in section \ref{pk_design}
 
 \begin{wrapfigure}{r}{0.5\textwidth}
+\centering
 \itemsep0em 
 \includegraphics[width=8cm]{paper/images/Process_Diagram.png}
 \caption{Simplified WireGuard-HSM Handshake Narration Process}
 \label{fig:handshake_process}
 \end{wrapfigure}
-The WireGuard protocol has no distinction between authentication and authorization. If a peer can successfully authenticate a handshake initiation message and response, the user is allowed to communicate over the session, with whatever resources may be gated on or behind the WireGuard peer.
+\subsubsection{Identify}
+The WireGuard protocol has no distinction between authentication and authorization. Authentication and authorization are \\ combined in order to reduce the handshake round-trip-time. 
+If a peer can successfully authenticate a handshake initiation message and response, the user is allowed to communicate over the session, with whatever \\ resources may be gated on or behind the WireGuard peer.
 Now that we understand the handshake initiation process and session key rotation in more detail, it should be clear how the initiators static private and public key, as well as the responders public key, form the basis for establishing a WireGuard session.
-\\
-
-
-\subsection {Identity and Authentication}
-\label{identity}
-
-\begin{wrapfigure}{r}{0.5\textwidth}
-\itemsep0em 
-\frame{\includegraphics[width=8cm]{paper/images/wg_config.png}}
-\caption{Example WireGuard Configuration File from the Reference Implementation}
-\label{fig:wg_config}
-\end{wrapfigure}
 
 \section{Key Storage}
-As mentioned previously, WireGuard leaves key management up to the user.
-Figure \ref{fig:wg_config} shows an example configuration file for WireGuard. The user's private, long-term static private key is under the "[Interface]" section and "[Peer]" section contains each peer's pre-shared static public key, as well as internet address information. The private key is simply saved as in plain-text as a Base64 encoded string.
-
-\section{Nitrokey and HSMs}
 
 \begin{wrapfigure}{r}{0.5\textwidth}
-\begin{center}
+\centering
+\itemsep0em 
+\frame{\includegraphics[width=8cm]{paper/images/wg_config.png}}
+\caption{Example WireGuard Configuration File from the Reference Implementation }
+\label{fig:wg_config}
+\end{wrapfigure}
+As mentioned previously, WireGuard leaves key management up to the user.
+Figure \ref{fig:wg_config} shows an example configuration file for WireGuard. The user's private, long-term static private key is under the "[Interface]" section and "[Peer]" section contains each peer's pre-shared static public key, as well as IP address information. The private key is saved in plain-text as a Base64 encoded string.
+
+\section{HSM - Nitrokey}
+
+\begin{wrapfigure}{r}{0.4\textwidth}
+\centering
 \itemsep0em 
 \frame{\includegraphics[width=5cm]{paper/images/nitrokey.jpg}}
 \caption{Image of the Nitrokey Start HSM}
 \label{img:nitrokey}
-\end{center}
+
 \end{wrapfigure}
 An HSM is a widely used, industry-standard device that is used to safeguard digital keys. Many HSMs undergo rigorous testing and certification, to validate their compliance with internationally recognized standards such as Federal Information Processing Standard (FIPS) and Common Criteria. They also typically use the ubiquitous and platform-independent PKCS\#11 interface. 
 
@@ -234,13 +235,12 @@ The confidentiality of a user's private key is paramount to proper client authen
 
 \section{Project Design}
 \begin{wrapfigure}{r}{0.5\textwidth}
-\itemsep0em 
-\begin{center}
-\includegraphics[width=7cm]{paper/images/high-level-overview.png}
+\centering
+\includegraphics[width=6cm]{paper/images/high-level-overview.png}
 \caption{A High-Level WireGuard-HSM System Interaction Diagram}
 \label{fig:highlevel_system}
-\end{center}
 \end{wrapfigure}
+
 Figure \ref{fig:highlevel_system} shows the major WireGuard-HSM system interaction. When WireGuard-HSM attempts to establish a new session with a peer, WireGuard-HSM interacts with a module named 'pkclient' which uses the PKCS\#11 interface to talk to the connected HSM. 
 
 \subsection{Pkclient}
@@ -253,12 +253,12 @@ Normally WireGuard has full-access to the long-term static private key for deriv
 \subsection{WireGuard-HSM}
 
 \begin{wrapfigure}{r}{0.56\textwidth}
-\begin{center}
+\centering
 \frame{\includegraphics[width=8cm]{paper/images/wg-hsm_config.png}}
 \caption{Example WireGuard-HSM Configuration File}
 \label{fig:wg_hsm_config}
-\end{center}
 \end{wrapfigure}
+
 WireGuard-HSM has the long-term private static key completely removed from the configuration file, replaced by a system library path to a PKCS\#11 library and the slot number on the HSM to use, see an example file in Figure \ref{fig:wg_hsm_config}.  In places where WireGuard expects access to the private key, changes were made to use the interface with pkclient for those calls instead.
 
 WireGuard-HSM was designed to work in a two modes, the HSM mode and the original software mode. 
@@ -271,7 +271,6 @@ Some small changes were made to the 'wireguard-tools' package to allow me to mod
 \section{Threat Model}
 Since WireGuard and all VPN clients, allow users access to protected resources across networks, there is inherent value for an attacker to gain access to these systems.
 The attacker may be highly motivated, targeting a specific individual or the attacker may be opportunistic, deploying malware en-mass and harvesting credentials of WireGuard nodes, for later sale or use.
-
 
 In the following section, I discuss the threat models for WireGuard and WireGuard-HSM, comparing WireGuard-HSM to see the relative strengths and weaknesses. This will help us evaluate the system design and perform a comparative threat model analysis. This analysis will show the relative strengths and weaknesses of the designs and if WireGuard-HSM has improved the security of the system at all.
 
@@ -288,7 +287,7 @@ In order to assess the relative risk in both systems, I will identify and calcul
 \bigskip
 
 \label{dread}
-DREAD scores are criticized as being subjective, however the calculated risk score can help us identify the relative strength and weaknesses when applied to similar systems. The scores are based on a ranking of 0-10, low to high for each category, added together and divided by the number of categories to give a final risk score to the weakness. 
+DREAD scores have been criticized as being subjective however the calculated risk score can help us identify the relative strength and weaknesses when applied to similar systems. The scores are based on a ranking of 0-10, low to high for each category, added together and divided by the number of categories to give a final risk score to the weakness. 
 The calculation of risk is as follows:
 %\medskip
 %\begin{center}
@@ -403,15 +402,40 @@ Rating & Description \\
 \end{tabular}
 \end{table}
 
-I will use also use Threat Model Data-Flow Diagrams to identify where data flows across trust boundaries.
-I will classify vulnerabilities and mitigations using terminology from the STRIDE method\cite{hernan_uncover_2019}.
+I will use Threat Model Data-Flow Diagrams to identify where data flows across trust boundaries.
+I will classify vulnerabilities and apply mitigations using terms and techniques from the STRIDE method\cite{hernan_uncover_2019}. In the following section we will briefly discuss STRIDE.
+
+\subsection{STRIDE}
+The STRIDE method provides tools for threat classification and vulnerability mitigation. Each threat breaks a particular and desirable security property of the system. For example, if a threat can take advantage of a vulnerability in the system such as information disclosure then confidentiality is violated. The recommended action according to the STRIDE method is applying a mitigation that will restore confidentiality. See Table \ref{STRIDE} for more details.
+\begin{table}[H]
+\centering
+\begin{tabular}{ |c|c| } 
+\hline
+\textbf{Threat} & \textbf{Security Property} \\
+\hline
+Spoofing  & Authenticity  \\
+\hline
+Tampering & Integrity \\ 
+\hline
+Repudiation & Non-repudiation \\ 
+\hline
+Information Disclosure & Confidentiality \\ 
+\hline
+Denial of Service & Availability \\ 
+\hline
+Elevation of Privilege & Authorization \\ 
+\hline
+\end{tabular}
+\caption{STRIDE Method for classifying and mitigating security threats}
+\label{STRIDE}
+\end{table}
 
 \subsection{DREAD Threat Rating Tables}
 Once we have calculated the DREAD scores, we can further simplify the total score for each threat into Critical, High, Medium and Low based on the average DREAD score, as other researchers have done when using DREAD \cite{kaur_critical_2017}. These rankings are illustrated in Table \ref{DREAD:rating}.
 
-\begin{flushleft}
+
 \begin{table}[H]
-\begin{center}
+\centering
 \begin{tabular}{ |c|c| } 
 \hline
 Average & Rating \\
@@ -427,22 +451,22 @@ Average & Rating \\
 \end{tabular}
 \caption{DREAD Threat Rating Table}
 \label{DREAD:rating}
-\end{center}
 \end{table}
-\end{flushleft}
+
 
 \chapter {Threat Models and Comparison}
 The two threat models in the following sections are primarily concerned with how data at rest is handled by both systems. WireGuard's handling of data in transit is out of scope for the analysis.
 First I will identify and evaluate the risks in the WireGuard reference implementation. Second I will identify and evaluate the same risks and any new risks in WireGuard-HSM. Finally I will compare the results to draw my conclusions about the modifications in WireGuard-HSM.
 
-\section {WireGuard - Reference Implementation}
+\section {WireGuard - Reference Impl. Threat Model}
 \label{wg-ref-analysis}
-This threat model is focused on WireGuard's: 1. Asset handling related to configuration file which contains private and public keys. 2. The security controls around the assets. 3. The threats to the system. 
+This threat model is focused on WireGuard's 1. Asset handling related to configuration file which contains private and public keys. 2. The security controls around the assets. 3. The threats to the system. 
 The computer running WireGuard will be considered Alice's computer and the WireGuard peer that Alice connects to is Bob. Both computers are turned on and connected to the network but Alice has not yet established a WireGuard session to Bob's computer. Refer back to section \ref{handinit} on how WireGuard establishes a session with a peer. 
 
 \begin{figure}[ht]
+\centering
 \includegraphics[width=14cm]{paper/images/WGH_DFD.png}
-\caption{Threat Model for the WireGuard Reference Implementation - Data Flow Diagram}
+\caption{Threat Model for the WireGuard Reference Impl. - Data Flow Diagram}
 \label{fig:wg_ref_dfd}
 \end{figure}
 
@@ -484,7 +508,7 @@ Discoverability & 5     & Attack may be targeted - exploited by general malware 
 \label{ref:attack1}
 \end{table}
 
-\setlength{\belowcaptionskip}{-10pt}
+
 \begin{table}[H]
 \begin{tabular}{|m{3cm}|m{1cm}|p{27em} |}
 \multicolumn{3}{l}{Potential for: Information Disclosure, Spoofing, DoS}                   \\
@@ -504,11 +528,10 @@ Discoverability & 4     & Attack may be targeted - exploited by advanced malware
 \multicolumn{3}{l}{\textbf{Dread Score: 5.2 - Crit}} 
 \end{tabular}
 \caption{Attack 3 - Loss of A01 and A02 after access to configuration file by using malware delivered using a zero-day exploit and the configuration file permissions are incorrectly set}
-\setlength{\belowcaptionskip}{-10pt}
 \label{ref:attack3}
 \end{table}
 \subsection{Sufficient permissions}
-If C01 is configured properly, then TA01 will need exploit one more vulnerability, in-order to gain access to A01 and A02. This offers a single layer of security, so the cost of this attack cost is slightly higher. Exploit chains are common-place in today's attacks so this is considered a reasonable assumption.  
+If C01 is configured properly, then TA01 will need exploit one more vulnerability, in-order to gain access to A01 and A02. This offers a single layer of security, so the cost of this attack cost is slightly higher. Exploit chains are common-place in today's attacks so this is a reasonable assumption.  
 See Table \ref{ref:attack2} and \ref{ref:attack4}.
 \begin{table}[H]
 
@@ -585,13 +608,14 @@ Discoverability & 3     & Attack must be targeted to user \\
 
 \begin{table}[H]
 \begin{tabular}{|m{3cm}|m{1cm}|p{27em} |}
-\multicolumn{3}{l}{Potential for: Information Disclosure, Spoofing, DoS}                   \\
+\multicolumn{3}{l}{Potential for: Information Disclosure, Spoofing, DoS}        \\
 \hline
 Category & Score & Rationale \\
 \hline
-Damage          & 9     & Loss of A01, A02, A03. DoS for a single user possible            \\
+Damage   & 9 & Loss of A01, A02, A03. DoS for a single user possible    
+ \\
 \hline
-Reproducibility & 4     & Two steps required. Attacker must gain physical access to the computer     \\
+Reproducibility & 4  & Two steps required. Attacker must gain physical access to the computer \\
 \hline
 Exploitability & 5      & Exploit is understood, usable by moderately skilled attacker  \\
 \hline
@@ -646,17 +670,18 @@ A Denial of Service vulnerability is also possible with the loss of A01 and A02.
 A DoS attack threatens availability in the system because Alice's connection to Bob's resources can be denied by a malicious third-party.
 
 \section{Vulnerability Mitigation}
-Both of the vulnerabilities that were identified, spoofing and DoS, were only enabled once the system suffered an information disclosure of the plain-text configuration file. We can address the root of both vulnerabilities by applying STRIDE's recommended mitigation for information disclosure which is confidentiality. 
+Both of the vulnerabilities that were identified, spoofing and DoS, were only enabled once the system suffered an information disclosure of the plain-text configuration file. We can address the root of both vulnerabilities by applying STRIDE's recommended mitigation for information disclosure which is confidentiality.
 
 The confidentiality of the configuration file is a weakness in the design of the system. The entire configuration file cannot be protected or encrypted without major design changes to the program.
 Security is often a series of trade-offs, in which system designers must consider user-convenience vs system security. If I remove the private key from the configuration file and place a security control around it, this should decrease user convenience at the benefit of increasing security and mitigating the identified risks.
 
-\section{WireGuard-HSM Threat model Analysis}
+\section{WireGuard-HSM Threat Model}
 \label{wg-hsm-analysis}
 This threat model is focused on WireGuard-HSM's asset handling related to the private key and peer public keys. All assumptions laid out for the previous threat model in section \ref{wg-ref-analysis} are the same here.
 
 \begin{figure}[H]
-\includegraphics[width=14cm]{paper/images/WGHSM_DFD.png}
+\centering
+\includegraphics[width=15cm]{paper/images/WGHSM_DFD.png}
 \caption{A Threat Model for WireGuard-HSM - Data Flow Diagram}
 \label{fig:wg_hsm_dfd}
 \end{figure}
@@ -671,7 +696,7 @@ Access to asset A01 is behind two controls. First A01 is now on a physically sep
 File system permissions are used to protect the Peer Information, A02.
 Security control C03, access to each WireGuard peer, is the pre-shared public key system implemented by WireGuard.
 
-\subsection{Threat Actor 1}
+\section{Threat Actor 1}
 The primary threat is TA01: a piece of malware that has gained access to Alice's computer and will search for keys in configuration files. This malware could have been delivered by acquiring a zero-day exploit or by using a known vulnerability with a piece of software running on Alice's computer. Using a known vulnerability would likely lower the cost of the attack.
 
 \subsubsection{Insufficient permissions}
@@ -772,7 +797,7 @@ Discoverability & 3     & Attack may be targeted - exploited by advanced malware
 \label{hsm:attack4}
 \end{table}
 
-\subsection{Threat Actor 2}
+\section{Threat Actor 2}
 TA02 is a malicious user who gains direct or indirect access to Alice's computer. 
 
 \subsubsection{Physical Access}
@@ -981,12 +1006,15 @@ Table \ref{tab:DREAD_AVG} shows the summary of the shared attacks for both syste
 \end{table}
 
 If we subtract WireGuard-HSM’s average DREAD score from WireGuard’s average\\
-DREAD score, then WireGuard-HSM reduces the average DREAD score of these shared attack scenarios by 2.9 points.
+DREAD score, then WireGuard-HSM reduces the average DREAD score of these shared attack scenarios by 2.6 points.
 
-DREAD scores are a unitless measure of calculated risk. The DREAD scores help in quantifying the results in terms of risk for each system component. The higher the DREAD score for a given scenario, the more important it is to apply mitigations to that system component. Since the DREAD scores are the total average, then a reduction in 2.9 points is a significant improvement.
+DREAD scores are a unitless measure of calculated risk. The DREAD scores help in quantifying the results in terms of risk for each system component. The higher the DREAD score for a given scenario, the more important it is to apply mitigations to that system component. Since the DREAD scores are the total average, then a reduction in 2.6 points is a significant improvement.
+
+The results are easier to put into context if we look at the DREAD threat rating in Section \ref{DREAD:rating}. WireGuard's average DREAD score of 5.5 is rated as Critical while WireGuard-HSM's average DREAD score is rated as Medium. WireGuard-HSM's average DREAD score is reduction of severity by two levels.
 
 In section \ref{hsm-vulns} we considered two additional attacks for WireGuard-HSM, \ref{hsm_attack8_social} and \ref{hsm_attack9_extract}. 
-These two attacks have an average DREAD rating of 3.5. Their risk is low but it demonstrates that no security solution is perfect. HSM vulnerabilities may be found and users must understand the possibilities of social engineering attacks.
+These two attacks have an average DREAD rating of 3.5. Their risk is low but it demonstrates that no security solution is perfect. HSM vulnerabilities may be found and users must understand the possibilities of social engineering attacks. The average DREAD rating of 3.5 for these two attacks is rated as a Medium.
+
 A successful attack would also lead to a spoofing and DoS vulnerability in WireGuard-HSM. Since the reproducibility and exploitability of those attacks is very low, I consider it an acceptable risk for the benefits to security that WireGuard-HSM demonstrated in attacks 1-7.
 
 
